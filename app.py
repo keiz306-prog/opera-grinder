@@ -1,4 +1,4 @@
-# version: v2.1
+# version: v2.2
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -61,33 +61,33 @@ with tab1:
     col3.metric("적용 모드", extraction_mode)
     
     st.markdown("---")
-    st.subheader("☕ 바스켓 4종 특성별 예측 결과 (물리 모델 v2.1 정밀 보정)")
+    st.subheader("☕ 바스켓 4종 특성별 예측 결과 (v2.2 엄격한 물리 위계 보정)")
     
     pressure_offset = -1.5 if "자동 커피모드" in extraction_mode else 0.0
     resistance_delta = (base_grind - target_grind) * 0.8 + (calculated_dose - base_dose) * 0.6 + (target_dial - base_dial) * 0.15
     
     base_p = 7.0 + resistance_delta + pressure_offset
     
-    # [핵심 수정] 바스켓별 고유 감쇠 계수(Multiplier)와 구조적 베이스 압력 분리
-    # 1. 데롱기 순정 비가압 (30.0mm): 가장 두꺼운 퍽 두께와 높은 저항 마감
-    p_pure = round(max(3.0, min(9.8, base_p * 1.12 + 0.8)), 1)
+    # [v2.2 철저한 순서 보장: 순정(30mm) > IMS(26mm) > 사제 일반(22mm) > iKafe(25mm)]
+    # 1. 데롱기 순정 비가압 (30.0mm) - 가장 깊고 저항 높음
+    p_pure = round(max(3.0, min(9.8, base_p * 1.15 + 0.9)), 1)
     f_pure = round(max(1.5, 4.0 - resistance_delta * 0.4), 1)
 
-    # 2. IMS (26.5mm): 정밀 홀 덕분에 순정 바로 밑에서 탄탄한 중고압 안정성 유지
-    p_ims = round(max(3.0, min(9.5, base_p * 1.06 + 0.4)), 1)
+    # 2. IMS Competition [DL2TH26E] (26.0mm) - 정밀 가공으로 탄탄한 중고압 유지
+    p_ims = round(max(3.0, min(9.5, base_p * 1.08 + 0.5)), 1)
     f_ims = round(max(1.8, 4.4 - resistance_delta * 0.4), 1)
 
-    # 3. 사제 일반 비가압 (22.0mm): 깊이가 얕아 IMS보다는 확실히 낮고, 고추출보다는 안정적으로 배치
-    p_third = round(max(2.8, min(9.2, base_p * 0.98 - 0.1)), 1)
-    f_third = round(max(2.0, 4.9 - resistance_delta * 0.4), 1)
+    # 3. 사제 일반 비가압 (22.0mm) - IMS보다 얕으므로 확실하게 IMS 아래로 고정
+    p_third = round(max(2.5, min(9.0, base_p * 0.96 - 0.2)), 1)
+    f_third = round(max(2.0, 5.0 - resistance_delta * 0.4), 1)
 
-    # 4. iKafe 고추출 (25.0mm): 고추출 설계 특성상 물길이 가장 시원하게 트여 압력이 부드럽게 풀림
-    p_ikafe = round(max(2.5, min(9.0, base_p * 0.92 - 0.5)), 1)
-    f_ikafe = round(max(2.2, 5.4 - resistance_delta * 0.4), 1)
+    # 4. iKafe 고추출 (25.0mm) - 고유 설계로 가장 원활한 유속 및 부드러운 압력
+    p_ikafe = round(max(2.2, min(8.8, base_p * 0.90 - 0.6)), 1)
+    f_ikafe = round(max(2.2, 5.5 - resistance_delta * 0.4), 1)
 
     df_baskets = pd.DataFrame({
-        "바스켓 구분": ["데롱기 순정 비가압", "IMS (DL2TH26E)", "사제 일반 비가압", "iKafe 고추출"],
-        "깊이": ["30.0mm", "26.5mm", "22.0mm", "25.0mm"],
+        "바스켓 구분": ["데롱기 순정 비가압", "IMS [DL2TH26E]", "사제 일반 비가압", "iKafe 고추출"],
+        "높이 (Height)": ["30.0mm", "26.0mm", "22.0mm", "25.0mm"],
         "예측 도징량": [f"{calculated_dose}g", f"{calculated_dose}g", f"{calculated_dose}g", f"{calculated_dose}g"],
         "예측 압력": [f"{p_pure} bar", f"{p_ims} bar", f"{p_third} bar", f"{p_ikafe} bar"],
         "예측 피크 유속": [f"{f_pure} g/s", f"{f_ims} g/s", f"{f_third} g/s", f"{f_ikafe} g/s"]
@@ -120,5 +120,6 @@ with tab3:
     st.header("📐 모델 물리적 특징 및 안내")
     st.markdown("""
     - **정방향 물리 법칙 반영:** 분쇄도를 굵게(숫자 증가) 갈면 퍽 저항이 줄어들어 압력이 낮아지고 유속이 빨라집니다.
-    - **바스켓 물리 계수 v2.1 정밀 적용:** 순정(30mm) > IMS(26.5mm) > 사제 일반 비가압(22mm) > iKafe 고추출(25mm) 순서의 압력 위계가 독립적인 승수(Multiplier) 계산을 통해 완벽하게 정렬되었습니다.
+    - **IMS 공식 스펙 반영:** 공식 [DL2TH26E Competition Filter Basket](https://www.imsfiltri.com/filters/DL2TH26E.html) 스펙(높이 26 mm)이 정확히 반영되었습니다.
+    - **엄격한 압력 위계 정렬:** 순정(30mm) > IMS [DL2TH26E] (26mm) > 사제 일반 비가압(22mm) > iKafe 고추출(25mm) 순서로 압력과 유속 체계가 완벽히 고정되었습니다.
     """)
