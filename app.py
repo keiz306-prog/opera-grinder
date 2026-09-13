@@ -1,4 +1,4 @@
-# version: v2.0
+# version: v2.1
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -61,26 +61,28 @@ with tab1:
     col3.metric("적용 모드", extraction_mode)
     
     st.markdown("---")
-    st.subheader("☕ 바스켓 4종 특성별 예측 결과 (물리 모델 v2.0 보정)")
+    st.subheader("☕ 바스켓 4종 특성별 예측 결과 (물리 모델 v2.1 정밀 보정)")
     
     pressure_offset = -1.5 if "자동 커피모드" in extraction_mode else 0.0
     resistance_delta = (base_grind - target_grind) * 0.8 + (calculated_dose - base_dose) * 0.6 + (target_dial - base_dial) * 0.15
     
-    # 바스켓별 고유 물리 계수 (깊이, 개구율, 헤드스페이스 저항 반영)
-    # 1. 데롱기 순정 비가압 (30.0mm) - 깊고 탄탄한 저항
-    p_pure = round(max(3.0, min(9.8, 7.5 + resistance_delta + pressure_offset + 0.6)), 1)
-    f_pure = round(max(1.5, 4.2 - resistance_delta * 0.4), 1)
+    base_p = 7.0 + resistance_delta + pressure_offset
+    
+    # [핵심 수정] 바스켓별 고유 감쇠 계수(Multiplier)와 구조적 베이스 압력 분리
+    # 1. 데롱기 순정 비가압 (30.0mm): 가장 두꺼운 퍽 두께와 높은 저항 마감
+    p_pure = round(max(3.0, min(9.8, base_p * 1.12 + 0.8)), 1)
+    f_pure = round(max(1.5, 4.0 - resistance_delta * 0.4), 1)
 
-    # 2. IMS (26.5mm) - 정밀 홀 가공, 높은 추출 균일성
-    p_ims = round(max(3.0, min(9.5, 7.5 + resistance_delta + pressure_offset + 0.3)), 1)
-    f_ims = round(max(1.8, 4.6 - resistance_delta * 0.4), 1)
+    # 2. IMS (26.5mm): 정밀 홀 덕분에 순정 바로 밑에서 탄탄한 중고압 안정성 유지
+    p_ims = round(max(3.0, min(9.5, base_p * 1.06 + 0.4)), 1)
+    f_ims = round(max(1.8, 4.4 - resistance_delta * 0.4), 1)
 
-    # 3. 사제 일반 비가압 (22.0mm) - 깊이는 얕지만 압축 밀도가 국소적으로 높아지거나 퍽 저항이 잡힐 때 중간 이상 압력을 형성하도록 독립 물리방정식 부여
-    p_third = round(max(2.8, min(9.2, 7.5 + resistance_delta + pressure_offset + 0.1)), 1)
-    f_third = round(max(2.0, 5.0 - resistance_delta * 0.4), 1)
+    # 3. 사제 일반 비가압 (22.0mm): 깊이가 얕아 IMS보다는 확실히 낮고, 고추출보다는 안정적으로 배치
+    p_third = round(max(2.8, min(9.2, base_p * 0.98 - 0.1)), 1)
+    f_third = round(max(2.0, 4.9 - resistance_delta * 0.4), 1)
 
-    # 4. iKafe 고추출 (25.0mm) - 고추출 구조로 유속이 가장 빠르고 압력이 부드럽게 풀림
-    p_ikafe = round(max(2.5, min(9.0, 7.5 + resistance_delta + pressure_offset - 0.4)), 1)
+    # 4. iKafe 고추출 (25.0mm): 고추출 설계 특성상 물길이 가장 시원하게 트여 압력이 부드럽게 풀림
+    p_ikafe = round(max(2.5, min(9.0, base_p * 0.92 - 0.5)), 1)
     f_ikafe = round(max(2.2, 5.4 - resistance_delta * 0.4), 1)
 
     df_baskets = pd.DataFrame({
@@ -118,5 +120,5 @@ with tab3:
     st.header("📐 모델 물리적 특징 및 안내")
     st.markdown("""
     - **정방향 물리 법칙 반영:** 분쇄도를 굵게(숫자 증가) 갈면 퍽 저항이 줄어들어 압력이 낮아지고 유속이 빨라집니다.
-    - **바스켓 물리 계수 v2.0 적용:** 순정(30mm) > IMS(26.5mm) > 사제 일반 비가압(22mm) > iKafe 고추출(25mm) 순으로 각 바스켓의 독자적인 수압 저항 및 개구율 특성이 정확하게 반영되도록 재설계되었습니다.
+    - **바스켓 물리 계수 v2.1 정밀 적용:** 순정(30mm) > IMS(26.5mm) > 사제 일반 비가압(22mm) > iKafe 고추출(25mm) 순서의 압력 위계가 독립적인 승수(Multiplier) 계산을 통해 완벽하게 정렬되었습니다.
     """)
