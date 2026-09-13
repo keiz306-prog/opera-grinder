@@ -1,4 +1,4 @@
-# version: v1.6
+# version: v1.7
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -69,21 +69,22 @@ with tab1:
     # Resistance delta: Coarser grind decreases resistance, finer grind increases it.
     resistance_delta = (base_grind - target_grind) * 0.8 + (calculated_dose - base_dose) * 0.6 + (target_dial - base_dial) * 0.15
     
+    # 바스켓별 물리적 특성 기반 베이스 압력 재조정 (IMS, 고추출 바스켓은 흐름이 원활해 압력이 적절히 유지되도록 설정)
     # 1. 순정 비가압 (30mm)
     p_pure = round(max(3.0, min(9.5, 7.6 + resistance_delta + pressure_offset)), 1)
     f_pure = round(max(2.0, 4.5 - resistance_delta * 0.4), 1)
 
-    # 2. 사제 일반 비가압 (22mm)
-    p_third = round(max(3.0, min(9.0, 6.8 + resistance_delta + pressure_offset)), 1)
-    f_third = round(max(2.2, 5.2 - resistance_delta * 0.4), 1)
+    # 2. 사제 일반 비가압 (22mm) -> 깊이가 얕아 압력이 너무 낮던 현상을 보정하여 고추출/IMS와 유사하거나 안정적인 수준으로 조정
+    p_third = round(max(3.0, min(9.0, 7.1 + resistance_delta + pressure_offset)), 1)
+    f_third = round(max(2.2, 5.0 - resistance_delta * 0.4), 1)
 
     # 3. IMS (26.5mm)
-    p_ims = round(max(3.5, min(9.8, 7.2 + resistance_delta + pressure_offset)), 1)
-    f_ims = round(max(1.8, 4.8 - resistance_delta * 0.4), 1)
+    p_ims = round(max(3.5, min(9.8, 7.4 + resistance_delta + pressure_offset)), 1)
+    f_ims = round(max(1.8, 4.7 - resistance_delta * 0.4), 1)
 
     # 4. iKafe 고추출 (25mm)
-    p_ikafe = round(max(3.5, min(9.5, 7.0 + resistance_delta + pressure_offset)), 1)
-    f_ikafe = round(max(2.0, 5.0 - resistance_delta * 0.4), 1)
+    p_ikafe = round(max(3.5, min(9.5, 7.3 + resistance_delta + pressure_offset)), 1)
+    f_ikafe = round(max(2.0, 4.8 - resistance_delta * 0.4), 1)
 
     # Use clean explicit lists to construct DataFrame safely without column alignment bugs
     df_baskets = pd.DataFrame({
@@ -122,5 +123,5 @@ with tab3:
     st.header("📐 모델 물리적 특징 및 안내")
     st.markdown("""
     - **정방향 물리 법칙 반영:** 분쇄도를 굵게(숫자 증가) 갈면 퍽 저항이 줄어들어 압력이 낮아지고 유속이 빨라지며, 가늘게(숫자 감소) 갈면 압력이 높아집니다.
-    - **바스켓별 특성 반영:** 순정 바스켓(30mm 깊이)이 가장 압력이 잘 쌓이며, IMS 등 정밀 바스켓은 홀의 정밀성과 원활한 개구율 덕분에 순정보다 압력이 안정적/완만하게 유지되도록 기준값이 재조정되었습니다.
+    - **바스켓별 특성 반영:** 순정 바스켓(30mm 깊이)이 가장 압력이 잘 쌓이며, IMS 및 iKafe 고추출 바스켓은 홀의 개구율과 정밀 가공 특성을 고려하여 압력 수치가 자연스럽게 정돈되도록 반영되었습니다.
     """)
