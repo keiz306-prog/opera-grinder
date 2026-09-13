@@ -1,4 +1,4 @@
-# version: v1.7
+# version: v1.8
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -69,30 +69,32 @@ with tab1:
     # Resistance delta: Coarser grind decreases resistance, finer grind increases it.
     resistance_delta = (base_grind - target_grind) * 0.8 + (calculated_dose - base_dose) * 0.6 + (target_dial - base_dial) * 0.15
     
-    # 바스켓별 물리적 특성 기반 베이스 압력 재조정 (IMS, 고추출 바스켓은 흐름이 원활해 압력이 적절히 유지되도록 설정)
-    # 1. 순정 비가압 (30mm)
-    p_pure = round(max(3.0, min(9.5, 7.6 + resistance_delta + pressure_offset)), 1)
-    f_pure = round(max(2.0, 4.5 - resistance_delta * 0.4), 1)
+    base_p = 7.5 + resistance_delta + pressure_offset
+    
+    # 바스켓별 물리적 특성에 따른 명확한 압력/유속 차이 부여
+    # 1. 데롱기 순정 비가압 (30mm) - 가장 깊고 저항이 높아 압력이 가장 높음
+    p_pure = round(max(3.0, min(9.5, base_p + 0.6)), 1)
+    f_pure = round(max(1.8, 4.2 - resistance_delta * 0.4), 1)
 
-    # 2. 사제 일반 비가압 (22mm) -> 깊이가 얕아 압력이 너무 낮던 현상을 보정하여 고추출/IMS와 유사하거나 안정적인 수준으로 조정
-    p_third = round(max(3.0, min(9.0, 7.1 + resistance_delta + pressure_offset)), 1)
-    f_third = round(max(2.2, 5.0 - resistance_delta * 0.4), 1)
+    # 2. IMS (DL2TH26E, 26.5mm) - 정밀 홀 가공으로 추출 효율이 좋고 안정적인 압력
+    p_ims = round(max(3.0, min(9.3, base_p + 0.2)), 1)
+    f_ims = round(max(2.0, 4.6 - resistance_delta * 0.4), 1)
 
-    # 3. IMS (26.5mm)
-    p_ims = round(max(3.5, min(9.8, 7.4 + resistance_delta + pressure_offset)), 1)
-    f_ims = round(max(1.8, 4.7 - resistance_delta * 0.4), 1)
+    # 3. iKafe 고추출 (25mm) - 고추출 설계로 흐름이 원활해 압력이 다소 완만함
+    p_ikafe = round(max(2.8, min(9.0, base_p - 0.3)), 1)
+    f_ikafe = round(max(2.2, 5.0 - resistance_delta * 0.4), 1)
 
-    # 4. iKafe 고추출 (25mm)
-    p_ikafe = round(max(3.5, min(9.5, 7.3 + resistance_delta + pressure_offset)), 1)
-    f_ikafe = round(max(2.0, 4.8 - resistance_delta * 0.4), 1)
+    # 4. 사제 일반 비가압 (22mm) - 깊이가 가장 얕고 유속이 빨라 압력이 가장 낮음
+    p_third = round(max(2.5, min(8.8, base_p - 0.8)), 1)
+    f_third = round(max(2.5, 5.5 - resistance_delta * 0.4), 1)
 
     # Use clean explicit lists to construct DataFrame safely without column alignment bugs
     df_baskets = pd.DataFrame({
-        "바스켓 구분": ["데롱기 순정 비가압", "사제 일반 비가압", "IMS (DL2TH26E)", "iKafe 고추출"],
-        "깊이": ["30.0mm", "22.0mm", "26.5mm", "25.0mm"],
+        "바스켓 구분": ["데롱기 순정 비가압", "IMS (DL2TH26E)", "iKafe 고추출", "사제 일반 비가압"],
+        "깊이": ["30.0mm", "26.5mm", "25.0mm", "22.0mm"],
         "예측 도징량": [f"{calculated_dose}g", f"{calculated_dose}g", f"{calculated_dose}g", f"{calculated_dose}g"],
-        "예측 압력": [f"{p_pure} bar", f"{p_third} bar", f"{p_ims} bar", f"{p_ikafe} bar"],
-        "예측 피크 유속": [f"{f_pure} g/s", f"{f_third} g/s", f"{f_ims} g/s", f"{f_ikafe} g/s"]
+        "예측 압력": [f"{p_pure} bar", f"{p_ims} bar", f"{p_ikafe} bar", f"{p_third} bar"],
+        "예측 피크 유속": [f"{f_pure} g/s", f"{f_ims} g/s", f"{f_ikafe} g/s", f"{f_third} g/s"]
     })
 
     st.dataframe(df_baskets, use_container_width=True)
@@ -123,5 +125,5 @@ with tab3:
     st.header("📐 모델 물리적 특징 및 안내")
     st.markdown("""
     - **정방향 물리 법칙 반영:** 분쇄도를 굵게(숫자 증가) 갈면 퍽 저항이 줄어들어 압력이 낮아지고 유속이 빨라지며, 가늘게(숫자 감소) 갈면 압력이 높아집니다.
-    - **바스켓별 특성 반영:** 순정 바스켓(30mm 깊이)이 가장 압력이 잘 쌓이며, IMS 및 iKafe 고추출 바스켓은 홀의 개구율과 정밀 가공 특성을 고려하여 압력 수치가 자연스럽게 정돈되도록 반영되었습니다.
+    - **바스켓별 특성 반영:** 순정 비가압(30mm) > IMS 정밀(26.5mm) > iKafe 고추출(25mm) > 사제 일반 비가압(22mm) 순으로 압력과 유속의 간격이 깊이와 개구율에 맞게 명확하게 정렬되었습니다.
     """)
