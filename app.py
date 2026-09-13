@@ -1,3 +1,6 @@
+# Let's generate the updated app code with versioning comment at the very top.
+# Version tracking: v1.4 (reflecting the correct physical logic and basket baseline adjustments)
+code_v1_4 = '''# version: v1.4
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -29,7 +32,7 @@ selected_bean_name = st.sidebar.selectbox("현재 활성 원두 선택 (Active B
 # Get active bean details
 active_bean = st.session_state.bean_db[st.session_state.bean_db["Bean Name"] == selected_bean_name].iloc[0]
 
-st.sidebar.markdown(f"**[선택된 원두 정보]**\n- 배전도: `{active_bean['Roast']}`\n- 기준 분쇄도: `{active_bean['Grind']}단`\n- 기준 다이얼: `{active_bean['Dial']}클릭`\n- 실측 도징량: `{active_bean['Dose']}g`")
+st.sidebar.markdown(f"**[선택된 원두 정보]**\\n- 배전도: `{active_bean['Roast']}`\\n- 기준 분쇄도: `{active_bean['Grind']}단`\\n- 기준 다이얼: `{active_bean['Dial']}클릭`\\n- 실측 도징량: `{active_bean['Dose']}g`")
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("🎛️ 타겟 추출 세팅")
@@ -45,9 +48,6 @@ tab1, tab2, tab3 = st.tabs(["📊 동적 추출 예측기", "🫘 원두 프로�
 with tab1:
     st.header("동적 도징 & 압력/유속 예측 대시보드")
     
-    # Corrected Physics Logic:
-    # 1. As grind gets coarser (target_grind > base_grind), resistance drops.
-    # 2. As dial increases or grind gets finer, pressure scales proportionally.
     base_dose = float(active_bean['Dose'])
     base_dial = float(active_bean['Dial'])
     base_grind = int(active_bean['Grind'])
@@ -74,24 +74,24 @@ with tab1:
     baskets_data = []
     
     # 1. 순정 비가압 (30mm)
-    p_pure = round(max(3.0, min(9.5, 7.5 + resistance_delta + pressure_offset)), 1)
+    p_pure = round(max(3.0, min(9.5, 7.6 + resistance_delta + pressure_offset)), 1)
     f_pure = round(max(2.0, 4.5 - resistance_delta * 0.4), 1)
     baskets_data.append({"바스켓 구분": "데롱기 순정 비가압", "깊이": "30.0mm", "예측 도징량": f"{calculated_dose}g", "예측 압력": f"{p_pure} bar", "예측 피크 유속": f"{f_pure} g/s"})
 
     # 2. 사제 일반 비가압 (22mm)
-    p_third = round(max(3.0, min(9.0, 7.0 + resistance_delta + pressure_offset)), 1)
-    f_third = round(max(2.2, 5.0 - resistance_delta * 0.4), 1)
+    p_third = round(max(3.0, min(9.0, 6.8 + resistance_delta + pressure_offset)), 1)
+    f_third = round(max(2.2, 5.2 - resistance_delta * 0.4), 1)
     baskets_data.append({"바스켓 구분": "사제 일반 비가압", "깊이": "22.0mm", "예측 도징량": f"{calculated_dose}g", "예측 압력": f"{p_third} bar", "예측 피크 유속": f"{f_third} g/s"})
 
-    # 3. IMS (26.5mm) - 정밀 바스켓
-    p_ims = round(max(3.5, min(9.8, 8.0 + resistance_delta + pressure_offset)), 1)
-    f_ims = round(max(1.8, 4.0 - resistance_delta * 0.4), 1)
+    # 3. IMS (26.5mm)
+    p_ims = round(max(3.5, min(9.8, 7.2 + resistance_delta + pressure_offset)), 1)
+    f_ims = round(max(1.8, 4.8 - resistance_delta * 0.4), 1)
     baskets_data.append({"바스켓 구분": "IMS (DL2TH26E)", "깊이": "26.5mm", "예측 도징량": f"{calculated_dose}g", "예측 압력": f"{p_ims} bar", "예측 피크 유속": f"{f_ims} g/s"})
 
     # 4. iKafe 고추출 (25mm)
-    p_ikafe = round(max(3.5, min(9.5, 7.8 + resistance_delta + pressure_offset)), 1)
-    f_ikafe = round(max(2.0, 4.2 - resistance_delta * 0.4), 1)
-    baskets_data.append({"바스켓 구분": "iKafe 고추출", "깊이": "25.0mm", "예측 도징량": f"{calculated_dose}g", "예측 압력": f"{p_ikafe} bar", "예측 피크 유속": f"{f_ikafe} g/s"})
+    p_ikafe = round(max(3.5, min(9.5, 7.0 + resistance_delta + pressure_offset)), 1)
+    f_ikafe = round(max(2.0, 5.0 - resistance_delta * 0.4), 1)
+    baskets_data.append({"바с켓 구분": "iKafe 고추출", "깊이": "25.0mm", "예측 도징량": f"{calculated_dose}g", "예측 압력": f"{p_ikafe} bar", "예측 피크 유속": f"{f_ikafe} g/s"})
 
     df_baskets = pd.DataFrame(baskets_data)
     st.dataframe(df_baskets, use_container_width=True)
@@ -121,6 +121,11 @@ with tab2:
 with tab3:
     st.header("📐 모델 물리적 특징 및 안내")
     st.markdown("""
-    - **정방향 물리 법칙 반영:** 분쇄도를 굵게(숫자 증가) 갈면 퍽 저항이 줄어들어 압력이 낮아지고 유속이 빨라지며, 가늘게(숫자 감소) 갈면 압력이 높아지도록 수정되었습니다.
-    - **자동 커피모드 오프셋:** 자동 모드 진입 시 수동 대비 약 1.5 bar 낮아지는 펌프 압력 거동을 정확히 반영합니다.
+    - **정방향 물리 법칙 반영:** 분쇄도를 굵게(숫자 증가) 갈면 퍽 저항이 줄어들어 압력이 낮아지고 유속이 빨라지며, 가늘게(숫자 감소) 갈면 압력이 높아집니다.
+    - **바스켓별 특성 반영:** 순정 바스켓(30mm 깊이)이 가장 압력이 잘 쌓이며, IMS 등 정밀 바스켓은 홀의 정밀성과 원활한 개구율 덕분에 순정보다 압력이 안정적/완만하게 유지되도록 기준값이 재조정되었습니다.
     """)
+'''
+
+with open("app.py", "w", encoding="utf-8") as f:
+    f.write(code_v1_4)
+print("Updated app.py with version v1.4 comment.")
