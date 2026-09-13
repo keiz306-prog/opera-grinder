@@ -45,16 +45,16 @@ tab1, tab2, tab3 = st.tabs(["📊 동적 추출 예측기", "🫘 원두 프로�
 with tab1:
     st.header("동적 도징 & 압력/유속 예측 대시보드")
     
-    # 2D Dosing Calculation Logic
-    # Baseline parameters from Excel model
-    # Predicted Dose = [(G_A + K * (Target_Grind - Setting_A)) * Target_Dial] * Scaling Factor (based on active bean)
-    base_dose = active_bean['Dose']
-    base_dial = active_bean['Dial']
-    base_grind = active_bean['Grind']
+    # Corrected Dynamic Dosing Logic based on Active Bean Baseline
+    base_dose = float(active_bean['Dose'])
+    base_dial = float(active_bean['Dial'])
+    base_grind = int(active_bean['Grind'])
     
-    # Simple proportional 2D linear model adapted to current active bean baseline
-    scaling_factor = base_dose / (18.3 * (base_dial / 22.0)) if base_dial > 0 else 1.0
-    calculated_dose = round((14.4 + 1.1 * (target_grind - 2)) * (target_dial / 18.0) * (base_dose / 15.3), 2)
+    grind_diff = target_grind - base_grind
+    dial_ratio = target_dial / base_dial if base_dial > 0 else 1.0
+    
+    # Proportional scaling anchored on the selected active bean baseline
+    calculated_dose = round((base_dose + grind_diff * 1.0) * dial_ratio, 2)
     
     col1, col2, col3 = st.columns(3)
     col1.metric("선택된 활성 원두", selected_bean_name)
@@ -96,7 +96,6 @@ with tab2:
     st.header("🫘 원두 프로파일 & 캘리브레이션 DB 관리")
     st.markdown("새로운 원두를 추가하거나 기존 원두의 기준 실측값(분쇄도, 다이얼, 도징량)을 관리할 수 있습니다.")
     
-    # Display current DB
     st.dataframe(st.session_state.bean_db, use_container_width=True)
     
     st.subheader("➕ 신규 원두 프로파일 등록")
@@ -118,7 +117,6 @@ with tab2:
 with tab3:
     st.header("📐 모델 물리적 특징 및 안내")
     st.markdown("""
-    - **바스켓 깊이 및 기하학적 특성 반영:** 30mm 순정 순수 깊이감과 22mm 사제 바스켓의 퍽 저항 차이를 선형 모델로 보정합니다.
+    - **기준값 앵커 연동:** 선택된 활성 원두의 기준 분쇄도, 다이얼, 실측 도징량을 정확한 기준점으로 삼아 타겟 세팅에 따른 증감 비율을 계산합니다.
     - **자동 커피모드 오프셋:** 자동 모드 진입 시 펌프 압력 거동을 반영하여 수동 대비 약 1.5 bar 낮아지는 점을 자동 계산합니다.
-    - **타임모어 저울 실측 연동:** 추출 후 타임모어 저울에 찍힌 최종 Yield와 시간을 바탕으로 원두 DB의 도징량 기준을 지속적으로 업데이트할 수 있습니다.
     """)
