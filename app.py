@@ -69,23 +69,23 @@ with tab1:
     
     baskets_data = []
     
-    # 1. 순정 비가압 (30mm)
-    p_pure = round(max(3.0, min(9.5, ((calculated_dose - 15.3) * 2.2 + 5.8) + pressure_offset)), 1)
+   # 1. 순정 비가압 (30mm) - 깊은 바스켓, 여유 공간 큼
+    p_pure = round(max(3.0, min(9.5, ((calculated_dose - 15.3) * 2.0 + 6.0) + pressure_offset)), 1)
     f_pure = round(max(2.5, 5.5 - (calculated_dose - 15.3) * 1.5), 1)
     baskets_data.append({"바스켓 구분": "데롱기 순정 비가압", "깊이": "30.0mm", "예측 도징량": f"{calculated_dose}g", "예측 압력": f"{p_pure} bar", "예측 피크 유속": f"{f_pure} g/s"})
 
-    # 2. 사제 일반 비가압 (22mm)
-    p_third = round(max(3.0, min(9.0, ((calculated_dose - 15.3) * 1.6 + 4.8) + pressure_offset)), 1)
+    # 2. 사제 일반 비가압 (22mm) - 얕아서 쉽게 압이 참
+    p_third = round(max(3.0, min(9.0, ((calculated_dose - 15.3) * 1.5 + 5.0) + pressure_offset)), 1)
     f_third = round(max(2.8, 6.0 - (calculated_dose - 15.3) * 1.5), 1)
     baskets_data.append({"바스켓 구분": "사제 일반 비가압", "깊이": "22.0mm", "예측 도징량": f"{calculated_dose}g", "예측 압력": f"{p_third} bar", "예측 피크 유속": f"{f_third} g/s"})
 
-    # 3. IMS (26.5mm)
-    p_ims = round(max(3.5, min(9.8, ((calculated_dose - 18.3) * 2.0 + 6.5) + pressure_offset)), 1)
+    # 3. IMS (26.5mm) - 정밀 바스켓, 안정적인 흐름 (기본 베이스 압력 상향 조정)
+    p_ims = round(max(4.0, min(9.8, ((calculated_dose - 18.3) * 1.8 + 7.2) + pressure_offset)), 1)
     f_ims = round(max(2.2, 4.8 - (calculated_dose - 18.3) * 1.2), 1)
     baskets_data.append({"바스켓 구분": "IMS (DL2TH26E)", "깊이": "26.5mm", "예측 도징량": f"{calculated_dose}g", "예측 압력": f"{p_ims} bar", "예측 피크 유속": f"{f_ims} g/s"})
 
-    # 4. iKafe 고추출 (25mm)
-    p_ikafe = round(max(3.5, min(9.5, ((calculated_dose - 17.2) * 1.8 + 6.0) + pressure_offset)), 1)
+    # 4. iKafe 고추출 (25mm) - 고추출 구조 특유의 저항감 반영
+    p_ikafe = round(max(3.5, min(9.5, ((calculated_dose - 17.2) * 1.6 + 6.8) + pressure_offset)), 1)
     f_ikafe = round(max(2.4, 4.5 - (calculated_dose - 17.2) * 1.2), 1)
     baskets_data.append({"바스켓 구분": "iKafe 고추출", "깊이": "25.0mm", "예측 도징량": f"{calculated_dose}g", "예측 압력": f"{p_ikafe} bar", "예측 피크 유속": f"{f_ikafe} g/s"})
 
