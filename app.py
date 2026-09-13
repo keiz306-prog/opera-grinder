@@ -1,4 +1,4 @@
-# version: v1.8
+# version: v1.9
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -71,22 +71,19 @@ with tab1:
     
     base_p = 7.5 + resistance_delta + pressure_offset
     
-    # 바스켓별 물리적 특성에 따른 명확한 압력/유속 차이 부여
-    # 1. 데롱기 순정 비가압 (30mm) - 가장 깊고 저항이 높아 압력이 가장 높음
-    p_pure = round(max(3.0, min(9.5, base_p + 0.6)), 1)
+    # 바스켓별 고유 효율 계수를 곱하여 너무 과도한 압력 차이나 정체 현상이 없도록 개선
+    p_pure = round(max(3.0, min(9.5, base_p * 1.05 + 0.3)), 1)
     f_pure = round(max(1.8, 4.2 - resistance_delta * 0.4), 1)
 
-    # 2. IMS (DL2TH26E, 26.5mm) - 정밀 홀 가공으로 추출 효율이 좋고 안정적인 압력
-    p_ims = round(max(3.0, min(9.3, base_p + 0.2)), 1)
+    p_ims = round(max(3.0, min(9.3, base_p * 1.02 + 0.1)), 1)
     f_ims = round(max(2.0, 4.6 - resistance_delta * 0.4), 1)
 
-    # 3. iKafe 고추출 (25mm) - 고추출 설계로 흐름이 원활해 압력이 다소 완만함
-    p_ikafe = round(max(2.8, min(9.0, base_p - 0.3)), 1)
+    p_ikafe = round(max(2.8, min(9.0, base_p * 0.98 - 0.1)), 1)
     f_ikafe = round(max(2.2, 5.0 - resistance_delta * 0.4), 1)
 
-    # 4. 사제 일반 비가압 (22mm) - 깊이가 가장 얕고 유속이 빨라 압력이 가장 낮음
-    p_third = round(max(2.5, min(8.8, base_p - 0.8)), 1)
-    f_third = round(max(2.5, 5.5 - resistance_delta * 0.4), 1)
+    # 사제 비가압 바스켓도 기본 저항에 비례하여 적절한 압력을 형성하도록 수정 (지나친 저압 현상 해소)
+    p_third = round(max(2.8, min(8.9, base_p * 0.95 - 0.2)), 1)
+    f_third = round(max(2.2, 5.2 - resistance_delta * 0.4), 1)
 
     # Use clean explicit lists to construct DataFrame safely without column alignment bugs
     df_baskets = pd.DataFrame({
@@ -125,5 +122,5 @@ with tab3:
     st.header("📐 모델 물리적 특징 및 안내")
     st.markdown("""
     - **정방향 물리 법칙 반영:** 분쇄도를 굵게(숫자 증가) 갈면 퍽 저항이 줄어들어 압력이 낮아지고 유속이 빨라지며, 가늘게(숫자 감소) 갈면 압력이 높아집니다.
-    - **바스켓별 특성 반영:** 순정 비가압(30mm) > IMS 정밀(26.5mm) > iKafe 고추출(25mm) > 사제 일반 비가압(22mm) 순으로 압력과 유속의 간격이 깊이와 개구율에 맞게 명확하게 정렬되었습니다.
+    - **바스켓별 특성 반영:** 각 바스켓의 깊이와 효율 계수가 비례 비율(스케일링) 방식으로 계산되도록 개선되어, 사제 비가압을 포함한 모든 바스켓의 압력과 유속이 자연스러운 간격으로 연동됩니다.
     """)
