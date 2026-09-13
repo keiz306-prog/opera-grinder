@@ -33,7 +33,7 @@ st.sidebar.markdown(f"**[선택된 원두 정보]**\n- 배전도: `{active_bean[
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("🎛️ 타겟 추출 세팅")
-target_grind = st.sidebar.slider("타겟 분쇄도 (단)", 1, 10, int(active_bean['Grind']))
+target_grind = st.sidebar.slider("타겟 분쇄도 (단 - 숫자가 클수록 굵음)", 1, 10, int(active_bean['Grind']))
 target_dial = st.sidebar.slider("타겟 다이얼 레벨 (클릭)", 10, 25, int(active_bean['Dial']))
 
 # Extraction Mode
@@ -45,16 +45,17 @@ tab1, tab2, tab3 = st.tabs(["📊 동적 추출 예측기", "🫘 원두 프로�
 with tab1:
     st.header("동적 도징 & 압력/유속 예측 대시보드")
     
-    # Corrected Dynamic Dosing Logic based on Active Bean Baseline
+    # Corrected Physics Logic:
+    # 1. As grind gets coarser (target_grind > base_grind), resistance drops.
+    # 2. As dial increases or grind gets finer, pressure scales proportionally.
     base_dose = float(active_bean['Dose'])
     base_dial = float(active_bean['Dial'])
     base_grind = int(active_bean['Grind'])
     
-    grind_diff = target_grind - base_grind
+    grind_diff = target_grind - base_grind  # Positive means coarser (less resistance)
     dial_ratio = target_dial / base_dial if base_dial > 0 else 1.0
     
-    # Proportional scaling anchored on the selected active bean baseline
-    calculated_dose = round((base_dose + grind_diff * 1.0) * dial_ratio, 2)
+    calculated_dose = round((base_dose - grind_diff * 0.5) * dial_ratio, 2)
     
     col1, col2, col3 = st.columns(3)
     col1.metric("선택된 활성 원두", selected_bean_name)
@@ -67,26 +68,29 @@ with tab1:
     # Pressure offset for Coffee Mode
     pressure_offset = -1.5 if "자동 커피모드" in extraction_mode else 0.0
     
+    # Resistance delta: Coarser grind decreases resistance, finer grind increases it.
+    resistance_delta = (base_grind - target_grind) * 0.8 + (calculated_dose - base_dose) * 0.6 + (target_dial - base_dial) * 0.15
+    
     baskets_data = []
     
-   # 1. 순정 비가압 (30mm) - 깊은 바스켓, 여유 공간 큼
-    p_pure = round(max(3.0, min(9.5, ((calculated_dose - 15.3) * 2.0 + 6.0) + pressure_offset)), 1)
-    f_pure = round(max(2.5, 5.5 - (calculated_dose - 15.3) * 1.5), 1)
+    # 1. 순정 비가압 (30mm)
+    p_pure = round(max(3.0, min(9.5, 7.5 + resistance_delta + pressure_offset)), 1)
+    f_pure = round(max(2.0, 4.5 - resistance_delta * 0.4), 1)
     baskets_data.append({"바스켓 구분": "데롱기 순정 비가압", "깊이": "30.0mm", "예측 도징량": f"{calculated_dose}g", "예측 압력": f"{p_pure} bar", "예측 피크 유속": f"{f_pure} g/s"})
 
-    # 2. 사제 일반 비가압 (22mm) - 얕아서 쉽게 압이 참
-    p_third = round(max(3.0, min(9.0, ((calculated_dose - 15.3) * 1.5 + 5.0) + pressure_offset)), 1)
-    f_third = round(max(2.8, 6.0 - (calculated_dose - 15.3) * 1.5), 1)
+    # 2. 사제 일반 비가압 (22mm)
+    p_third = round(max(3.0, min(9.0, 7.0 + resistance_delta + pressure_offset)), 1)
+    f_third = round(max(2.2, 5.0 - resistance_delta * 0.4), 1)
     baskets_data.append({"바스켓 구분": "사제 일반 비가압", "깊이": "22.0mm", "예측 도징량": f"{calculated_dose}g", "예측 압력": f"{p_third} bar", "예측 피크 유속": f"{f_third} g/s"})
 
-    # 3. IMS (26.5mm) - 정밀 바스켓, 안정적인 흐름 (기본 베이스 압력 상향 조정)
-    p_ims = round(max(4.0, min(9.8, ((calculated_dose - 18.3) * 1.8 + 7.2) + pressure_offset)), 1)
-    f_ims = round(max(2.2, 4.8 - (calculated_dose - 18.3) * 1.2), 1)
+    # 3. IMS (26.5mm) - 정밀 바스켓
+    p_ims = round(max(3.5, min(9.8, 8.0 + resistance_delta + pressure_offset)), 1)
+    f_ims = round(max(1.8, 4.0 - resistance_delta * 0.4), 1)
     baskets_data.append({"바스켓 구분": "IMS (DL2TH26E)", "깊이": "26.5mm", "예측 도징량": f"{calculated_dose}g", "예측 압력": f"{p_ims} bar", "예측 피크 유속": f"{f_ims} g/s"})
 
-    # 4. iKafe 고추출 (25mm) - 고추출 구조 특유의 저항감 반영
-    p_ikafe = round(max(3.5, min(9.5, ((calculated_dose - 17.2) * 1.6 + 6.8) + pressure_offset)), 1)
-    f_ikafe = round(max(2.4, 4.5 - (calculated_dose - 17.2) * 1.2), 1)
+    # 4. iKafe 고추출 (25mm)
+    p_ikafe = round(max(3.5, min(9.5, 7.8 + resistance_delta + pressure_offset)), 1)
+    f_ikafe = round(max(2.0, 4.2 - resistance_delta * 0.4), 1)
     baskets_data.append({"바스켓 구분": "iKafe 고추출", "깊이": "25.0mm", "예측 도징량": f"{calculated_dose}g", "예측 압력": f"{p_ikafe} bar", "예측 피크 유속": f"{f_ikafe} g/s"})
 
     df_baskets = pd.DataFrame(baskets_data)
@@ -117,6 +121,6 @@ with tab2:
 with tab3:
     st.header("📐 모델 물리적 특징 및 안내")
     st.markdown("""
-    - **기준값 앵커 연동:** 선택된 활성 원두의 기준 분쇄도, 다이얼, 실측 도징량을 정확한 기준점으로 삼아 타겟 세팅에 따른 증감 비율을 계산합니다.
-    - **자동 커피모드 오프셋:** 자동 모드 진입 시 펌프 압력 거동을 반영하여 수동 대비 약 1.5 bar 낮아지는 점을 자동 계산합니다.
+    - **정방향 물리 법칙 반영:** 분쇄도를 굵게(숫자 증가) 갈면 퍽 저항이 줄어들어 압력이 낮아지고 유속이 빨라지며, 가늘게(숫자 감소) 갈면 압력이 높아지도록 수정되었습니다.
+    - **자동 커피모드 오프셋:** 자동 모드 진입 시 수동 대비 약 1.5 bar 낮아지는 펌프 압력 거동을 정확히 반영합니다.
     """)
