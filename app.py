@@ -63,7 +63,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
 
 # 1번 탭: 동적 추출 예측기 (오페라)
 with tab1:
-    st.subheader("동적 도징 & 압력/유속 예측 대시보드 (v2.5 - 고압 확장 대응)")
+    st.subheader("동적 도징 & 압력/유속 예측 대시보드 (v2.6 - 압력 연동 보정 완료)")
     
     col_a1, col_a2, col_a3 = st.columns(3)
     with col_a1:
@@ -78,14 +78,16 @@ with tab1:
         st.markdown("**적용 모드**")
         st.markdown(f"### {extraction_mode}")
 
-    # --- 분쇄도(1단 근처) 및 고압(13~14바+) 연동 압력 산출 로직 ---
-    # 분쇄도가 1단에 가깝고 다이얼이 조여질수록 저항이 커져 고압(13~14바 이상)을 형성하는 경향 반영
-    base_pressure_calc = 15.5 - (target_grind * 1.2) - (target_dial * 0.1)
+    # --- 분쇄도, 다이얼, 그리고 '도징량'이 올바르게 비례/반비례하도록 수정된 압력 산출 로직 ---
+    # 도징량(calculated_dose)이 많을수록, 분쇄도가 가늘수록(target_grind가 작을수록), 다이얼이 조여질수록 압력이 상승
+    dose_ratio = calculated_dose / bean_info['base_dose']
+    base_pressure_calc = (15.5 - (target_grind * 1.0) - (target_dial * 0.05)) * (dose_ratio ** 0.8)
+    
     if "자동" in extraction_mode:
         base_pressure_calc -= 1.5
     
     # 순정 비가압 기준 예상 피크 압력 (16바 상한 캡 적용)
-    estimated_peak_pressure = round(max(5.0, min(16.0, base_pressure_calc)), 1)
+    estimated_peak_pressure = round(max(4.0, min(16.0, base_pressure_calc)), 1)
 
     st.markdown("---")
     st.subheader("☕ 바스켓 4종 특성별 실측 캘리브레이션 예측 결과 (고압 영역 포함)")
@@ -107,11 +109,16 @@ with tab1:
         "예측 도징량": [f"{calculated_dose} g"] * 4,
         "예측 피크 압력": [
             f"{estimated_peak_pressure} bar", 
-            f"{max(4.0, round(estimated_peak_pressure - 3.0, 1))} bar", 
-            f"{max(3.5, round(estimated_peak_pressure - 5.0, 1))} bar", 
-            f"{max(3.0, round(estimated_peak_pressure - 5.5, 1))} bar"
+            f"{max(3.0, round(estimated_peak_pressure - 3.0, 1))} bar", 
+            f"{max(2.5, round(estimated_peak_pressure - 5.0, 1))} bar", 
+            f"{max(2.0, round(estimated_peak_pressure - 5.5, 1))} bar"
         ],
-        "예측 평균 유속": ["3.2 g/s", "3.8 g/s", "4.5 g/s", "4.9 g/s"]
+        "예측 평균 유속": [
+            f"{round(3.2 * (bean_info['base_dose'] / max(calculated_dose, 10.0)), 1)} g/s", 
+            f"{round(3.8 * (bean_info['base_dose'] / max(calculated_dose, 10.0)), 1)} g/s", 
+            f"{round(4.5 * (bean_info['base_dose'] / max(calculated_dose, 10.0)), 1)} g/s", 
+            f"{round(4.9 * (bean_info['base_dose'] / max(calculated_dose, 10.0)), 1)} g/s"
+        ]
     }
     st.dataframe(pd.DataFrame(basket_data), use_container_width=True)
 
