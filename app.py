@@ -51,7 +51,7 @@ extraction_mode = st.sidebar.radio(
 
 # --- 메인 헤더 ---
 st.title("☕ 드롱기 라 스페셜리스타 오페라 에스프레소 추출 예측기")
-st.caption("타임모어 실측 캘리브레이션(v2.4) 및 원두 DB 관리(수정/삭제)가 통합된 스마트 시뮬레이터입니다.")
+st.caption("타임모어 실측 캘리브레이션(v2.6) 및 원두 DB 관리(수정/삭제)가 통합된 스마트 시뮬레이터입니다.")
 
 # --- 탭 구조 ---
 tab1, tab2, tab3, tab4 = st.tabs([
@@ -63,7 +63,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
 
 # 1번 탭: 동적 추출 예측기 (오페라)
 with tab1:
-    st.subheader("동적 도징 & 압력/유속 예측 대시보드 (v2.6 - 압력 연동 보정 완료)")
+    st.subheader("동적 도징 & 압력/유속 예측 대시보드 (v2.6 - 도징-압력 연동 보정 완료)")
     
     col_a1, col_a2, col_a3 = st.columns(3)
     with col_a1:
@@ -78,16 +78,19 @@ with tab1:
         st.markdown("**적용 모드**")
         st.markdown(f"### {extraction_mode}")
 
-    # --- 분쇄도, 다이얼, 그리고 '도징량'이 올바르게 비례/반비례하도록 수정된 압력 산출 로직 ---
-    # 도징량(calculated_dose)이 많을수록, 분쇄도가 가늘수록(target_grind가 작을수록), 다이얼이 조여질수록 압력이 상승
-    dose_ratio = calculated_dose / bean_info['base_dose']
-    base_pressure_calc = (15.5 - (target_grind * 1.0) - (target_dial * 0.05)) * (dose_ratio ** 0.8)
+    # --- 기준값 일치 및 도징량 비례 반영 압력 산출 로직 ---
+    # 1. 분쇄도와 다이얼에 따른 기본 저항값 산출
+    base_pressure_calc = 15.5 - (target_grind * 1.2) - (target_dial * 0.1)
     
+    # 2. 도징량 변동 비율 계산 (기준값과 같을 때는 정확히 1이 되어 압력 왜곡 방지)
+    dose_ratio = calculated_dose / bean_info['base_dose']
+    adjusted_pressure = base_pressure_calc * (dose_ratio ** 1.0)
+
     if "자동" in extraction_mode:
-        base_pressure_calc -= 1.5
+        adjusted_pressure -= 1.5
     
     # 순정 비가압 기준 예상 피크 압력 (16바 상한 캡 적용)
-    estimated_peak_pressure = round(max(4.0, min(16.0, base_pressure_calc)), 1)
+    estimated_peak_pressure = round(max(4.0, min(16.0, adjusted_pressure)), 1)
 
     st.markdown("---")
     st.subheader("☕ 바스켓 4종 특성별 실측 캘리브레이션 예측 결과 (고압 영역 포함)")
@@ -227,6 +230,7 @@ with tab4:
     st.markdown("""
     - **분쇄도 편차 계수:** 분쇄도가 굵어질수록 공극 증가 및 밀도 변화를 반영하여 도징량이 유기적으로 보정됩니다.
     - **다이얼 비율 계수:** 다이얼 레벨 변화에 따른 투입 부피 변동을 반영합니다.
-    - **고압 실험 구간 연동 (13~14바+):** 오페라 내장 그라인더의 미세 조절 한계를 극복하기 위해, 1단 부근의 고저항 구간에서 13~14바 이상의 고압 피크가 정상 수용되도록 압력 시뮬레이션 범위를 확장했습니다.
+    - **도징-압력 정방향 연동:** 도징량이 줄어들면 퍽의 저항이 감소하여 피크 압력도 비례해서 낮아지도록 물리적 인과관계를 바로잡았습니다.
+    - **고압 실험 구간 연동 (13~14바+):** 오페라 내장 그라인더의 미세 조절 한계를 극복하기 위해, 1단 부근의 고저항 구간에서 13~14바 이상의 고압 피크가 16바 스케일 내에서 정상 수용되도록 확장했습니다.
     - **매버릭 핸드밀 모드:** 싱글도징 특성에 맞춰 수동 타이핑 입력 및 독립된 원두 프로필 관리를 제공합니다.
     """)
