@@ -63,7 +63,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
 
 # 1번 탭: 동적 추출 예측기 (오페라)
 with tab1:
-    st.subheader("동적 도징 & 압력/유속 예측 대시보드 (v2.5)")
+    st.subheader("동적 도징 & 압력/유속 예측 대시보드 (v2.5 - 고압 확장 대응)")
     
     col_a1, col_a2, col_a3 = st.columns(3)
     with col_a1:
@@ -78,14 +78,39 @@ with tab1:
         st.markdown("**적용 모드**")
         st.markdown(f"### {extraction_mode}")
 
-    st.markdown("---")
-    st.subheader("☕ 바스켓 4종 특성별 실측 캘리브레이션 예측 결과 (v2.4)")
+    # --- 분쇄도(1단 근처) 및 고압(13~14바+) 연동 압력 산출 로직 ---
+    # 분쇄도가 1단에 가깝고 다이얼이 조여질수록 저항이 커져 고압(13~14바 이상)을 형성하는 경향 반영
+    base_pressure_calc = 15.5 - (target_grind * 1.2) - (target_dial * 0.1)
+    if "자동" in extraction_mode:
+        base_pressure_calc -= 1.5
     
+    # 순정 비가압 기준 예상 피크 압력 (16바 상한 캡 적용)
+    estimated_peak_pressure = round(max(5.0, min(16.0, base_pressure_calc)), 1)
+
+    st.markdown("---")
+    st.subheader("☕ 바스켓 4종 특성별 실측 캘리브레이션 예측 결과 (고압 영역 포함)")
+    
+    # 압력 상태에 따른 메시지 분기 (13~14바 이상 고압 실험 구간 대응)
+    if estimated_peak_pressure >= 13.0:
+        pressure_status_msg = f"🔥 **[고압 실험 구간 ({estimated_peak_pressure} bar)]**: 13~14바 이상 고저항 셋팅입니다. 찌르는 산미를 억제하고 바디감을 두텁게 만들기 위한 오페라 내장 그라인더 자동 루틴 타겟 구간입니다."
+        st.warning(pressure_status_msg)
+    elif estimated_peak_pressure >= 10.0:
+        pressure_status_msg = f"🟡 **[준고압 / 고저항 구간 ({estimated_peak_pressure} bar)]**: 안정권보다 높은 저항을 주는 세팅입니다."
+        st.info(pressure_status_msg)
+    else:
+        pressure_status_msg = f"🟢 **[표준 추출 구간 ({estimated_peak_pressure} bar)]**: 밸런스가 안정적인 표준 압력 영역입니다."
+        st.success(pressure_status_msg)
+
     basket_data = {
         "바스켓 구분": ["드롱기 순정 비가압", "사제 일반 비가압", "IMS [DL2TH26E]", "iKafe 고추출"],
         "높이 (Height)": ["30.0mm", "22.0mm", "26.0mm", "25.0mm"],
         "예측 도징량": [f"{calculated_dose} g"] * 4,
-        "예측 피크 압력": ["12.2 bar", "9.2 bar", "6.9 bar", "6.0 bar"],
+        "예측 피크 압력": [
+            f"{estimated_peak_pressure} bar", 
+            f"{max(4.0, round(estimated_peak_pressure - 3.0, 1))} bar", 
+            f"{max(3.5, round(estimated_peak_pressure - 5.0, 1))} bar", 
+            f"{max(3.0, round(estimated_peak_pressure - 5.5, 1))} bar"
+        ],
         "예측 평균 유속": ["3.2 g/s", "3.8 g/s", "4.5 g/s", "4.9 g/s"]
     }
     st.dataframe(pd.DataFrame(basket_data), use_container_width=True)
@@ -195,5 +220,6 @@ with tab4:
     st.markdown("""
     - **분쇄도 편차 계수:** 분쇄도가 굵어질수록 공극 증가 및 밀도 변화를 반영하여 도징량이 유기적으로 보정됩니다.
     - **다이얼 비율 계수:** 다이얼 레벨 변화에 따른 투입 부피 변동을 반영합니다.
+    - **고압 실험 구간 연동 (13~14바+):** 오페라 내장 그라인더의 미세 조절 한계를 극복하기 위해, 1단 부근의 고저항 구간에서 13~14바 이상의 고압 피크가 정상 수용되도록 압력 시뮬레이션 범위를 확장했습니다.
     - **매버릭 핸드밀 모드:** 싱글도징 특성에 맞춰 수동 타이핑 입력 및 독립된 원두 프로필 관리를 제공합니다.
     """)
