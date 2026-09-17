@@ -44,7 +44,7 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("### 🎛️ 타겟 추출 세팅")
 target_grind = st.sidebar.slider("타겟 분쇄도 (단 - 숫자가 클수록 굵음)", 1, 10, 1)
 
-# 0.5단위 미세 조절 및 최소값 1.0 확장 적용
+# 0.5단위 미세 조절 및 최소값 1.0 확장
 target_dial = st.sidebar.slider(
     "타겟 다이얼 레벨 (0.5단위 조절, 최소 1.0)", 
     min_value=1.0, 
@@ -60,7 +60,7 @@ extraction_mode = st.sidebar.radio(
 
 # --- 메인 헤더 ---
 st.title("☕ 드롱기 라 스페셜리스타 오페라 에스프레소 추출 예측기")
-st.caption("타임모어 실측 캘리브레이션(v2.7) - 순정 싱글 비가압(7.8g / 10bar / 41.7g 수율) 앵커 연동 및 0.5단위 슬라이더 적용")
+st.caption("타임모어 실측 캘리브레이션(v2.8) - 2샷 그라인딩 2포인트 앵커(다이얼 20: 17.8g / 다이얼 10: 7.8g) 도징 보정 완료")
 
 # --- 탭 구조 ---
 tab1, tab2, tab3, tab4 = st.tabs([
@@ -72,7 +72,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
 
 # 1번 탭: 동적 추출 예측기 (오페라)
 with tab1:
-    st.subheader("동적 도징 & 압력/유속 예측 대시보드 (v2.7 - 싱글 비가압 및 0.5단 저도징 프로필 반영)")
+    st.subheader("동적 도징 & 압력/유속 예측 대시보드 (v2.8 - 실측 앵커 기반 정밀 도징 보정)")
     
     col_a1, col_a2, col_a3 = st.columns(3)
     with col_a1:
@@ -81,65 +81,61 @@ with tab1:
     with col_a2:
         grind_diff = target_grind - bean_info['base_grind']
         
-        # 더블 바스켓 예측 도징량 계산
-        calculated_dose_double = round((bean_info['base_dose'] - (grind_diff * 0.5)) * (target_dial / bean_info['base_dial']), 1)
+        # --- 2포인트 실측 캘리브레이션 도징 연산 (다이얼 20 = 17.8g / 다이얼 10 = 7.8g) ---
+        # 다이얼 10~20 구간: 1다이얼당 1.0g 변동 기울기 적용
+        if target_dial >= 10.0:
+            base_calc_dose = 7.8 + (target_dial - 10.0) * 1.0
+        else:
+            # 다이얼 1.0~10.0 구간: 감쇄 곡선 적용 (1.0 레벨 시 약 1.5g)
+            base_calc_dose = 7.8 - (10.0 - target_dial) * 0.7
+            
+        calculated_dose = round(max(0.5, base_calc_dose - (grind_diff * 0.5)), 1)
         
-        # 순정 싱글 비가압 바스켓 실측 앵커 연산 (레벨 10 = 실측 7.8g 기준)
-        calculated_dose_single = round(7.8 * (target_dial / 10.0) - (grind_diff * 0.25), 1)
-        calculated_dose_single = max(0.5, calculated_dose_single)
-        
-        st.markdown("**2D 모델 예측 도징량**")
-        st.markdown(f"### 더블: {calculated_dose_double} g | 싱글: {calculated_dose_single} g")
+        st.markdown("**그라인더 예측 토출량 (2샷 모드)**")
+        st.markdown(f"### {calculated_dose} g")
     with col_a3:
         st.markdown("**적용 모드**")
         st.markdown(f"### {extraction_mode}")
 
-    # --- 압력 산출 로직 ---
-    # 1. 더블 바스켓 기본 압력
-    base_pressure_calc = 15.5 - (target_grind * 1.2) - (target_dial * 0.1)
-    dose_ratio_double = calculated_dose_double / max(bean_info['base_dose'], 1.0)
-    adjusted_pressure_double = base_pressure_calc * (dose_ratio_double ** 1.0)
+    # --- 압력 산출 연산 ---
+    # 더블 바스켓 압력 (17.8g 기준)
+    base_pressure_double = 15.5 - (target_grind * 1.2) - ((20.0 - target_dial) * 0.5)
+    dose_ratio_double = calculated_dose / bean_info['base_dose']
+    adjusted_pressure_double = base_pressure_double * (dose_ratio_double ** 1.0)
     if "자동" in extraction_mode:
         adjusted_pressure_double -= 1.5
     estimated_peak_pressure_double = round(max(3.0, min(16.0, adjusted_pressure_double)), 1)
 
-    # 2. 순정 싱글 비가압 바스켓 전용 압력 (레벨 10 / 분쇄도 1에서 10.0 bar 실측 앵커 적용)
-    single_base_pressure = 10.0 - ((target_grind - 1) * 1.5) + ((target_dial - 10.0) * 0.4)
+    # 싱글 바스켓 압력 (레벨 10 / 7.8g 결합 시 10.0 bar 실측 앵커)
+    single_base_pressure = 10.0 - ((target_grind - 1) * 1.5) + ((calculated_dose - 7.8) * 0.8)
     if "자동" in extraction_mode:
         single_base_pressure -= 1.5
     estimated_peak_pressure_single = round(max(2.0, min(15.0, single_base_pressure)), 1)
 
     st.markdown("---")
-    st.subheader("☕ 바스켓 5종 특성별 실측 캘리브레이션 예측 결과")
+    st.subheader("☕ 동일 토출량(원두 가루) 투입 시 바스켓별 추출 예측 결과")
     
     if estimated_peak_pressure_double >= 13.0:
-        st.warning(f"🔥 **[더블 고압 실험 구간 ({estimated_peak_pressure_double} bar)]**: 13~14바 이상 고저항 세팅입니다.")
+        st.warning(f"🔥 **[고압 실험 구간 ({estimated_peak_pressure_double} bar)]**: 고저항 세팅입니다.")
     elif estimated_peak_pressure_double >= 10.0:
-        st.info(f"🟡 **[더블 준고압 / 고저항 구간 ({estimated_peak_pressure_double} bar)]**: 안정권보다 높은 저항 세팅입니다.")
+        st.info(f"🟡 **[준고압 / 고저항 구간 ({estimated_peak_pressure_double} bar)]**: 안정권보다 높은 저항 세팅입니다.")
     else:
-        st.success(f"🟢 **[더블 표준 추출 구간 ({estimated_peak_pressure_double} bar)]**: 밸런스가 안정적인 압력 영역입니다.")
+        st.success(f"🟢 **[표준 추출 구간 ({estimated_peak_pressure_double} bar)]**: 밸런스가 안정적인 압력 영역입니다.")
 
-    # 유속 산출 (더블 및 싱글 실측치 기반)
-    double_flow_base = round(3.2 * (bean_info['base_dose'] / max(calculated_dose_double, 5.0)), 1)
-    # 싱글 실측: 레벨 10(7.8g)에서 41.7g / 48s ≈ 0.87 g/s
-    single_flow_rate = round(0.87 * (7.8 / max(calculated_dose_single, 1.0)), 1)
+    # 유속 연산
+    flow_double = round(3.2 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 1)
+    flow_single = round(0.87 * (7.8 / max(calculated_dose, 1.0)), 1)
 
     basket_data = {
         "바스켓 구분": [
             "드롱기 순정 더블 비가압", 
-            "드롱기 순정 싱글 비가압 ⭐[신규]", 
+            "드롱기 순정 싱글 비가압 ⭐[실측 기준]", 
             "사제 일반 비가압", 
             "IMS [DL2TH26E]", 
             "iKafe 고추출"
         ],
         "높이 (Height)": ["30.0mm", "19.0mm", "22.0mm", "26.0mm", "25.0mm"],
-        "예측 도징량": [
-            f"{calculated_dose_double} g", 
-            f"{calculated_dose_single} g", 
-            f"{calculated_dose_double} g", 
-            f"{calculated_dose_double} g", 
-            f"{calculated_dose_double} g"
-        ],
+        "투입 원두량": [f"{calculated_dose} g"] * 5,
         "예측 피크 압력": [
             f"{estimated_peak_pressure_double} bar", 
             f"{estimated_peak_pressure_single} bar", 
@@ -148,16 +144,16 @@ with tab1:
             f"{max(2.0, round(estimated_peak_pressure_double - 5.5, 1))} bar"
         ],
         "예측 평균 유속": [
-            f"{double_flow_base} g/s", 
-            f"{single_flow_rate} g/s", 
-            f"{round(double_flow_base * 1.19, 1)} g/s", 
-            f"{round(double_flow_base * 1.41, 1)} g/s", 
-            f"{round(double_flow_base * 1.53, 1)} g/s"
+            f"{flow_double} g/s", 
+            f"{flow_single} g/s", 
+            f"{round(flow_double * 1.19, 1)} g/s", 
+            f"{round(flow_double * 1.41, 1)} g/s", 
+            f"{round(flow_double * 1.53, 1)} g/s"
         ],
         "특징 및 추출 팁": [
-            "더블 샷 표준 스윗스팟 (22.5 다이얼 권장)",
-            "2샷 모드 적용 시 퍽의 물 흡수량 감소로 약 40~42g 추출 (11.0~11.5 다이얼 권장)",
-            "유속이 빠르고 깔끔한 뉘앙스",
+            "도징량 17~18g(다이얼 20 부근) 결합 시 정통 더블 에스프레소 스윗스팟",
+            "도징량 7.8g(다이얼 10) 결합 시 10bar / 41.7g 수율 형성 (2샷 모드 추출)",
+            "더블 도징 기준 유속이 빠르고 깔끔한 뉘앙스",
             "넓은 타공 면적으로 산미 표현 우수 및 고수율",
             "초고수율 / 클린컵 추출 특성"
         ]
@@ -265,13 +261,12 @@ with tab3:
 
 # 4번 탭: 2D 도징 계산 모델 설명
 with tab4:
-    st.subheader("📐 2D 도징 계산 모델 설명 (v2.7 Update)")
+    st.subheader("📐 2D 도징 계산 모델 설명 (v2.8 Update)")
     st.markdown("""
-    - **0.5단위 미세 도징 슬라이더 지원:** 다이얼 레벨 최소값을 1.0까지 낮추고 0.5단위 조절을 지원하여 저도징 세팅 편의성을 향상했습니다.
-    - **드롱기 순정 싱글 비가압 바스켓 프로필 연동:** 
-      - **실측 앵커 포인트:** 분쇄도 1단 / 도징 레벨 10 / 실측 무게 **7.8g** / 피크 압력 **10 bar** / 48초 간 **41.7g** 추출
-      - **수분 보유량 물리 보정:** 적은 원두량(7.8g)으로 인해 퍽 내부 수분 흡수량이 감소하여 2샷 모드 적용 시 잔으로 떨어지는 실제 추출량이 ~41.7g으로 증가하는 수리학적 특성을 연산 모델에 통합했습니다.
-    - **분쇄도 편차 계수:** 분쇄도가 굵어질수록 공극 증가 및 밀도 변화를 반영하여 도징량이 유기적으로 보정됩니다.
-    - **도징-압력 정방향 연동:** 도징량이 줄어들면 퍽의 저항이 감소하여 피크 압력도 비례해서 낮아지도록 물리적 인과관계를 유지합니다.
-    - **고압 실험 구간 연동 (13~14바+):** 1단 부근의 고저항 구간에서 13~14바 이상의 고압 피크가 16바 스케일 내에서 정상 반영됩니다.
+    - **그라인더 2포인트 앵커 실측 보정:** 
+      - **다이얼 20.0:** 17.8g 토출 (더블 표준 기준점)
+      - **다이얼 10.0:** 7.8g 토출 (실측 보정 앵커)
+      - 다이얼 10~20 구간은 $1.0\text{g/클릭}$의 정밀 실측 기울기가 적용됩니다.
+    - **0.5단위 미세 슬라이더 & 저도징 곡선:** 다이얼 1.0~10.0 구간은 저도징 감쇄 모델을 적용하여 1.0 레벨까지 연동 가능합니다.
+    - **바스켓별 저항 연산 이원화:** 동일한 토출량(원두 가루)이 투입되었을 때, 싱글 바스켓과 더블 바스켓의 기하학적 형상(경사각) 차이에 따른 압력과 유속 변동을 정확하게 분리하여 예측합니다.
     """)
