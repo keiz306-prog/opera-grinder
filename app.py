@@ -129,33 +129,34 @@ with tab1:
     else:
         st.success(f"🟢 **[표준 추출 구간 ({estimated_peak_double} bar)]**: 밸런스가 안정적인 영역입니다.")
 
+    # 요청하신 순서 및 명칭 수정 반영 (★ 순정 싱글 비가압 최상단 배치)
     basket_data = {
         "바스켓 구분": [
-            "드롱기 순정 더블 비가압", 
-            "드롱기 순정 싱글 비가압 ⭐[오늘 실측 연동]", 
+            "★ 순정 싱글 비가압", 
+            "순정 더블 비가압", 
             "사제 일반 비가압", 
             "IMS [DL2TH26E]", 
             "iKafe 고추출"
         ],
-        "높이 (Height)": ["30.0mm", "19.0mm", "22.0mm", "26.0mm", "25.0mm"],
+        "높이 (Height)": ["19.0mm", "30.0mm", "22.0mm", "26.0mm", "25.0mm"],
         "예측 도징량": [f"{calculated_dose} g"] * 5,
         "예측 피크 압력": [
-            f"{estimated_peak_double} bar", 
             f"{estimated_peak_single} bar", 
+            f"{estimated_peak_double} bar", 
             f"{max(3.0, round(estimated_peak_double - 3.0, 1))} bar", 
             f"{max(2.5, round(estimated_peak_double - 5.0, 1))} bar", 
             f"{max(2.0, round(estimated_peak_double - 5.5, 1))} bar"
         ],
         "예측 평균 유속": [
-            f"{flow_double} g/s", 
             f"{flow_single} g/s", 
+            f"{flow_double} g/s", 
             f"{round(flow_double * 1.19, 1)} g/s", 
             f"{round(flow_double * 1.41, 1)} g/s", 
             f"{round(flow_double * 1.53, 1)} g/s"
         ],
         "예측 추출 시간 (약 43g 기준)": [
-            f"{int(43 / max(flow_double, 0.1))} 초",
             f"{est_time_single} 초",
+            f"{int(43 / max(flow_double, 0.1))} 초",
             f"{int(43 / max(flow_double * 1.19, 0.1))} 초",
             f"{int(43 / max(flow_double * 1.41, 0.1))} 초",
             f"{int(43 / max(flow_double * 1.53, 0.1))} 초"
