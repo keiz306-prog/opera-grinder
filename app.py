@@ -38,7 +38,7 @@ st.sidebar.markdown(f"**[선택된 원두 정보]**")
 st.sidebar.markdown(f"- 배전도: {bean_info['roast']}")
 st.sidebar.markdown(f"- 기준 분쇄도: {bean_info['base_grind']}단")
 st.sidebar.markdown(f"- 기준 다이얼: {bean_info['base_dial']}클릭")
-st.sidebar.markdown(f"- 실측 도징량: {bean_info['base_dose']}g")
+st.sidebar.markdown(f"- 실측 기준 도징량: {bean_info['base_dose']}g")
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🎛️ 타겟 추출 세팅")
@@ -53,7 +53,7 @@ extraction_mode = st.sidebar.radio(
 
 # --- 메인 헤더 ---
 st.title("☕ 드롱기 라 스페셜리스타 오페라 에스프레소 추출 예측기")
-st.caption("그라인더 토출량 단일화 및 단순화가 완료된 시뮬레이터입니다.")
+st.caption("2샷 토출 모드 고정 실측 다이얼 캘리브레이션(v3.0) 적용 버전입니다.")
 
 # --- 탭 구조 ---
 tab1, tab2, tab3, tab4 = st.tabs([
@@ -75,17 +75,26 @@ with tab1:
         grind_diff = target_grind - bean_info['base_grind']
         dial_diff = target_dial - bean_info['base_dial']
         
-        # [단일 도징량 공식] 다이얼과 분쇄도에만 의존하는 유일한 토출량 변수
-        calculated_dose = round(bean_info['base_dose'] - (grind_diff * 0.5) + (dial_diff * 0.25), 1)
+        # [실측 보정 수식]
+        # 10.5클릭 설정 시 -> 11.3g 출력
+        # 11.0클릭 설정 시 -> 12.4g 출력
+        # 20.0클릭 설정 시 -> 17.8g 출력 (기준값)
+        if target_dial <= 11.0:
+            # 11.0클릭 이하 미세 조정 구간 (0.5클릭당 1.1g 변동)
+            calculated_dose = round(12.4 + (target_dial - 11.0) * 2.2 - (grind_diff * 0.3), 1)
+        else:
+            # 11.0클릭 초과 구간
+            calculated_dose = round(12.4 + (target_dial - 11.0) * 0.6 - (grind_diff * 0.3), 1)
+            
         calculated_dose = max(5.0, calculated_dose)
 
-        st.markdown("**그라인더 토출 예측량**")
+        st.markdown("**2샷 토출 모드 실제 예측 도징량**")
         st.markdown(f"### {calculated_dose} g")
     with col_a3:
         st.markdown("**적용 모드**")
         st.markdown(f"### {extraction_mode}")
 
-    # --- 기준 피크 압력 산출 ---
+    # --- 피크 압력 산출 로직 ---
     base_pressure_calc = 15.5 - (target_grind * 1.2) - (target_dial * 0.1)
     dose_ratio = calculated_dose / bean_info['base_dose']
     adjusted_pressure = base_pressure_calc * (dose_ratio ** 1.0)
@@ -96,7 +105,7 @@ with tab1:
     estimated_peak_pressure = round(max(4.0, min(16.0, adjusted_pressure)), 1)
 
     st.markdown("---")
-    st.subheader("☕ 바스켓 5종 특성별 예측 결과")
+    st.subheader("☕ 바스켓 5종 특성별 예측 결과 (동일 도징량 적용)")
     
     if estimated_peak_pressure >= 13.0:
         st.warning(f"🔥 **[고압 실험 구간 ({estimated_peak_pressure} bar)]**: 고저항 셋팅입니다.")
@@ -105,7 +114,7 @@ with tab1:
     else:
         st.success(f"🟢 **[표준 추출 구간 ({estimated_peak_pressure} bar)]**: 표준 영역입니다.")
 
-    # 모든 바스켓의 '예측 도징량' 열을 단일 변수 f"{calculated_dose} g"로 완전히 통일
+    # 5개 바스켓 모두 실측 보정된 calculated_dose(11.3g)로 통일 표기
     basket_data = {
         "바스켓 구분": [
             "★ 순정 싱글 비가압", 
@@ -123,7 +132,7 @@ with tab1:
             f"{calculated_dose} g"
         ],
         "예측 피크 압력": [
-            f"{round(min(16.0, estimated_peak_pressure + 3.7), 1)} bar", # 바스켓 용적 수치 차이만 반영
+            f"{round(min(16.0, estimated_peak_pressure + 3.7), 1)} bar", 
             f"{estimated_peak_pressure} bar", 
             f"{max(3.0, round(estimated_peak_pressure - 3.0, 1))} bar", 
             f"{max(2.5, round(estimated_peak_pressure - 5.0, 1))} bar", 
@@ -161,4 +170,4 @@ with tab3:
 # 4번 탭
 with tab4:
     st.subheader("📐 2D 도징 계산 모델 설명")
-    st.markdown("- 타겟 다이얼 세팅에 따른 예측 도징량은 바스켓 종류와 무관하게 완전히 일치합니다.")
+    st.markdown("- 2샷 토출 모드 고정 상태에서 다이얼 10.5클릭 시 11.3g, 11.0클릭 시 12.4g이 산출되도록 실측 곡선이 적용되었습니다.")
