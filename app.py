@@ -53,7 +53,7 @@ extraction_mode = st.sidebar.radio(
 
 # --- 메인 헤더 ---
 st.title("☕ 드롱기 라 스페셜리스타 오페라 에스프레소 추출 예측기")
-st.caption("타임모어 실측 캘리브레이션(v2.7 - 싱글 실측 보정) 및 원두 DB 관리가 통합된 스마트 시뮬레이터입니다.")
+st.caption("타임모어 실측 캘리브레이션(v2.8 - 도징량 일괄 통일) 및 원두 DB 관리가 통합된 스마트 시뮬레이터입니다.")
 
 # --- 탭 구조 ---
 tab1, tab2, tab3, tab4 = st.tabs([
@@ -65,7 +65,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
 
 # 1번 탭: 동적 추출 예측기 (오페라)
 with tab1:
-    st.subheader("동적 도징 & 압력/유속 예측 대시보드 (v2.7 - 싱글 실측 데이터 반영)")
+    st.subheader("동적 도징 & 압력/유속 예측 대시보드 (v2.8 - 2샷 고정 도징량 수식 일치)")
     
     col_a1, col_a2, col_a3 = st.columns(3)
     with col_a1:
@@ -75,21 +75,17 @@ with tab1:
         grind_diff = target_grind - bean_info['base_grind']
         dial_diff = target_dial - bean_info['base_dial']
         
-        # 더블 바스켓용 도징량 계산
+        # 2샷 토출 모드 고정 도징량 산출 (1클릭당 0.25g 보정)
         calculated_dose = round(bean_info['base_dose'] - (grind_diff * 0.5) + (dial_diff * 0.25), 1)
         calculated_dose = max(5.0, calculated_dose)
-        
-        # [실측 보정] 싱글 바스켓용 도징량 계산 (11클릭: 12.2g, 10.5클릭: 11.2g 기준 적용)
-        single_calculated_dose = round(12.2 + (target_dial - 11.0) * 2.0 - (grind_diff * 0.3), 1)
-        single_calculated_dose = max(3.0, single_calculated_dose)
 
-        st.markdown("**2D 모델 예측 도징량 (더블 기준)**")
+        st.markdown("**2D 모델 예측 도징량 (2샷 토출 기준)**")
         st.markdown(f"### {calculated_dose} g")
     with col_a3:
         st.markdown("**적용 모드**")
         st.markdown(f"### {extraction_mode}")
 
-    # --- 기본 더블 압력 산출 로직 ---
+    # --- 피크 압력 산출 로직 ---
     base_pressure_calc = 15.5 - (target_grind * 1.2) - (target_dial * 0.1)
     dose_ratio = calculated_dose / bean_info['base_dose']
     adjusted_pressure = base_pressure_calc * (dose_ratio ** 1.0)
@@ -98,11 +94,6 @@ with tab1:
         adjusted_pressure -= 1.5
     
     estimated_peak_pressure = round(max(4.0, min(16.0, adjusted_pressure)), 1)
-
-    # [실측 보정] 싱글 비가압 피크 압력 산출 (실측 피크 압력 연동)
-    single_peak_pressure = round(max(3.0, min(16.0, 11.5 + (target_dial - 11.0) * 2.0 - (grind_diff * 0.5))), 1)
-    if "자동" in extraction_mode:
-        single_peak_pressure = round(max(3.0, single_peak_pressure - 1.5), 1)
 
     st.markdown("---")
     st.subheader("☕ 바스켓 5종 특성별 실측 캘리브레이션 예측 결과")
@@ -117,7 +108,7 @@ with tab1:
         pressure_status_msg = f"🟢 **[표준 추출 구간 ({estimated_peak_pressure} bar)]**: 밸런스가 안정적인 표준 압력 영역입니다."
         st.success(pressure_status_msg)
 
-    # 표 구성 (싱글 바스켓 실측값 적용)
+    # 표 구성 (싱글 포함 모든 바스켓 도징량을 calculated_dose로 통일)
     basket_data = {
         "바스켓 구분": [
             "★ 순정 싱글 비가압", 
@@ -128,21 +119,21 @@ with tab1:
         ],
         "높이 (Height)": ["19.0mm", "30.0mm", "22.0mm", "26.0mm", "25.0mm"],
         "예측 도징량": [
-            f"{single_calculated_dose} g",
+            f"{calculated_dose} g",
             f"{calculated_dose} g",
             f"{calculated_dose} g",
             f"{calculated_dose} g",
             f"{calculated_dose} g"
         ],
         "예측 피크 압력": [
-            f"{single_peak_pressure} bar",
+            f"{round(max(3.0, estimated_peak_pressure + 3.7), 1)} bar", # 용적 차이로 인한 싱글 고압 반영
             f"{estimated_peak_pressure} bar", 
             f"{max(3.0, round(estimated_peak_pressure - 3.0, 1))} bar", 
             f"{max(2.5, round(estimated_peak_pressure - 5.0, 1))} bar", 
             f"{max(2.0, round(estimated_peak_pressure - 5.5, 1))} bar"
         ],
         "예측 평균 유속": [
-            f"{round(1.0 + (target_dial * 0.02), 1)} g/s",
+            f"{round(1.4 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 1)} g/s",
             f"{round(3.2 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 1)} g/s", 
             f"{round(3.8 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 1)} g/s", 
             f"{round(4.5 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 1)} g/s", 
@@ -175,7 +166,7 @@ with tab2:
     st.markdown("### 📈 핸드밀 4포인트 측정 결과 맵 (추후 계산식 연동 예정)")
     st.info("타임모어 4개 포인트 데이터 기반 매버릭 핸드밀 전용 예측 맵과 그래프가 이곳에 연동될 예정입니다.")
 
-# 3번 탭: 원두 프로파일 DB 관리 (오페라 DB + 핸드밀 DB 통합)
+# 3번 탭: 원두 프로파일 DB 관리
 with tab3:
     st.subheader("🫘 원두 프로파일 DB 관리")
     
@@ -254,7 +245,6 @@ with tab3:
 with tab4:
     st.subheader("📐 2D 도징 계산 모델 설명")
     st.markdown("""
-    - **싱글 비가압 실측 보정:** 제공해주신 타임모어 싱글 추출 실측 데이터(11다이얼-12.2g, 10.5다이얼-11.2g, 피크 압력 10.5~11.5 bar)를 바탕으로 싱글 전용 예측 보정식이 적용되었습니다.
-    - **더블 추출 기준 보존:** 더블 바스켓 및 사제/IMS/iKafe 바스켓용 예측 도징량 및 압력 모델은 독립적으로 유지됩니다.
-    - **슬라이더 광대역화:** 다이얼 1.0~30.0 레벨까지 0.5 단위 연속 보정을 제공합니다.
+    - **2샷 고정 토출 체계:** 바스켓 종류와 상관없이 동일한 타겟 분쇄도/다이얼 조건에서는 동일한 2샷 토출 도징량이 적용됩니다.
+    - **바스켓별 내압 변동:** 싱글 비가압 바스켓은 깊이(19mm)가 얕고 수용 용적이 적어 동일 도징량(17.8g)을 다져 넣었을 때 저항이 극대화되므로 피크 압력이 더 높게 형성되도록 모델링되었습니다.
     """)
