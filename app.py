@@ -53,7 +53,7 @@ extraction_mode = st.sidebar.radio(
 
 # --- 메인 헤더 ---
 st.title("☕ 드롱기 라 스페셜리스타 오페라 에스프레소 추출 예측기")
-st.caption("싱글 바스켓 실측 압력 캘리브레이션(v3.1) 적용 버전입니다.")
+st.caption("원두 추가/삭제 DB 관리 UI 복구 완료(v3.4) 버전입니다.")
 
 # --- 탭 구조 ---
 tab1, tab2, tab3, tab4 = st.tabs([
@@ -72,15 +72,12 @@ with tab1:
         st.markdown("**선택된 활성 원두**")
         st.markdown(f"### {active_bean}")
     with col_a2:
-        grind_diff = target_grind - bean_info['base_grind']
-        dial_diff = target_dial - bean_info['base_dial']
-        
-        # 2샷 토출 모드 실제 토출량 계산
+        # [다이얼 전용 순수 도징량 계산]
         if target_dial <= 11.0:
-            calculated_dose = round(12.4 + (target_dial - 11.0) * 2.2 - (grind_diff * 0.3), 1)
+            calculated_dose = round(12.4 + (target_dial - 11.0) * 2.2, 1)
         else:
-            calculated_dose = round(12.4 + (target_dial - 11.0) * 0.6 - (grind_diff * 0.3), 1)
-            
+            calculated_dose = round(12.4 + (target_dial - 11.0) * 0.6, 1)
+
         calculated_dose = max(5.0, calculated_dose)
 
         st.markdown("**2샷 토출 모드 실제 예측 도징량**")
@@ -100,8 +97,6 @@ with tab1:
     estimated_peak_pressure = round(max(4.0, min(16.0, adjusted_pressure)), 1)
 
     # --- [싱글 바스켓 실측 압력 캘리브레이션] ---
-    # 10.5클릭(11.3g) -> 피크 10.5 bar / 종료 10.0 bar
-    # 11.0클릭(12.4g) -> 피크 11.5 bar / 종료 10.5 bar
     single_peak_press = round(10.5 + (calculated_dose - 11.3) * 0.909, 1)
     single_end_press = round(10.0 + (calculated_dose - 11.3) * 0.455, 1)
 
@@ -166,12 +161,55 @@ with tab2:
     with col_m2:
         st.info(f"**원두명:** {selected_mav_bean}\n\n**배전도:** {mav_info['roast']}\n\n**가공 방식:** {mav_info['processing']}")
 
-# 3번 탭
+# 3번 탭: 원두 프로파일 DB 관리 (추가/삭제 UI 완전 복구)
 with tab3:
     st.subheader("🫘 원두 프로파일 DB 관리")
+    
+    # 1. 현재 등록된 DB 목록 출력
+    st.markdown("##### 📋 현재 등록된 원두 목록")
     st.dataframe(pd.DataFrame.from_dict(st.session_state.bean_db, orient='index'), use_container_width=True)
+    
+    st.markdown("---")
+    
+    col_db1, col_db2 = st.columns(2)
+    
+    # 2. 신규 원두 추가 UI
+    with col_db1:
+        st.markdown("##### ➕ 신규 원두 프로파일 추가")
+        with st.form("add_bean_form", clear_on_submit=True):
+            new_bean_name = st.text_input("원두 이름", placeholder="예: 과테말라 안티구아")
+            new_roast = st.selectbox("배전도", ["약배전 (Light)", "중약배전 (Medium-Light)", "중배전 (Medium)", "중강배전 (Medium-Dark)", "강배전 (Dark)"])
+            new_base_grind = st.number_input("기준 분쇄도 (단)", 1.0, 10.0, 1.0, 0.5)
+            new_base_dial = st.number_input("기준 다이얼 (클릭)", 1.0, 30.0, 20.0, 0.5)
+            new_base_dose = st.number_input("실측 기준 도징량 (g)", 5.0, 30.0, 17.8, 0.1)
+            
+            submit_btn = st.form_submit_button("➕ 새로운 원두 추가")
+            if submit_btn:
+                if new_bean_name.strip() != "":
+                    st.session_state.bean_db[new_bean_name.strip()] = {
+                        "roast": new_roast,
+                        "base_grind": new_base_grind,
+                        "base_dial": new_base_dial,
+                        "base_dose": new_base_dose
+                    }
+                    st.success(f"'{new_bean_name}' 원두가 등록되었습니다.")
+                    st.rerun()
+                else:
+                    st.error("원두 이름을 입력해주세요.")
+
+    # 3. 기존 원두 삭제 UI
+    with col_db2:
+        st.markdown("##### 🗑️ 원두 프로파일 삭제")
+        if len(st.session_state.bean_db) > 1:
+            delete_target = st.selectbox("삭제할 원두 선택", list(st.session_state.bean_db.keys()), key="del_select")
+            if st.button("🗑️ 선택한 원두 삭제", type="primary"):
+                del st.session_state.bean_db[delete_target]
+                st.success(f"'{delete_target}' 원두가 삭제되었습니다.")
+                st.rerun()
+        else:
+            st.warning("최소 1개의 원두 프로파일은 유지되어야 하므로 삭제할 수 없습니다.")
 
 # 4번 탭
 with tab4:
     st.subheader("📐 2D 도징 계산 모델 설명")
-    st.markdown("- 싱글 비가압 바스켓의 피크 압력과 추출 종료 시점의 압력이 실측 데이터(10.5클릭 / 11.0클릭) 기준선으로 정확히 맞추어졌습니다.")
+    st.markdown("- 원두 프로파일 DB 관리 탭에서 자유롭게 원두 등록/삭제가 가능하며, 선택된 원두를 기준으로 동적 예측이 수행됩니다.")
