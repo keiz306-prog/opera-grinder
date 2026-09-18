@@ -8,7 +8,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# 1. 세션 스테이트 초기화 (오페라 원두 DB & 매버릭 핸드밀 원두 DB)
+# 1. 세션 스테이트 초기화
 if "bean_db" not in st.session_state:
     st.session_state.bean_db = {
         "기본 블렌드 (Default Medium)": {
@@ -28,7 +28,7 @@ if "maverick_bean_db" not in st.session_state:
         }
     }
 
-# --- 사이드바 (오페라 모드) ---
+# --- 사이드바 ---
 st.sidebar.markdown("### ⚙️ 원두 및 세팅 컨트롤러")
 bean_list = list(st.session_state.bean_db.keys())
 active_bean = st.sidebar.selectbox("현재 활성 원두 선택 (Active Bean)", bean_list)
@@ -44,7 +44,7 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("### 🎛️ 타겟 추출 세팅")
 
 target_grind = st.sidebar.slider("타겟 분쇄도 (단 - 숫자가 클수록 굵음)", 1.0, 10.0, 1.0, step=0.5)
-target_dial = st.sidebar.slider("타겟 다이얼 레벨 (클릭)", 1.0, 30.0, 20.0, step=0.5)
+target_dial = st.sidebar.slider("타겟 다이얼 레벨 (클릭)", 1.0, 30.0, 10.5, step=0.5)
 
 extraction_mode = st.sidebar.radio(
     "추출 모드 선택",
@@ -53,7 +53,7 @@ extraction_mode = st.sidebar.radio(
 
 # --- 메인 헤더 ---
 st.title("☕ 드롱기 라 스페셜리스타 오페라 에스프레소 추출 예측기")
-st.caption("타임모어 실측 캘리브레이션(v2.8 - 도징량 일괄 통일) 및 원두 DB 관리가 통합된 스마트 시뮬레이터입니다.")
+st.caption("그라인더 토출량 단일화 및 단순화가 완료된 시뮬레이터입니다.")
 
 # --- 탭 구조 ---
 tab1, tab2, tab3, tab4 = st.tabs([
@@ -63,9 +63,9 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "📐 2D 도징 계산 모델 설명"
 ])
 
-# 1번 탭: 동적 추출 예측기 (오페라)
+# 1번 탭: 동적 추출 예측기
 with tab1:
-    st.subheader("동적 도징 & 압력/유속 예측 대시보드 (v2.8 - 2샷 고정 도징량 수식 일치)")
+    st.subheader("동적 도징 & 압력/유속 예측 대시보드")
     
     col_a1, col_a2, col_a3 = st.columns(3)
     with col_a1:
@@ -75,17 +75,17 @@ with tab1:
         grind_diff = target_grind - bean_info['base_grind']
         dial_diff = target_dial - bean_info['base_dial']
         
-        # 2샷 토출 모드 고정 도징량 산출 (1클릭당 0.25g 보정)
+        # [단일 도징량 공식] 다이얼과 분쇄도에만 의존하는 유일한 토출량 변수
         calculated_dose = round(bean_info['base_dose'] - (grind_diff * 0.5) + (dial_diff * 0.25), 1)
         calculated_dose = max(5.0, calculated_dose)
 
-        st.markdown("**2D 모델 예측 도징량 (2샷 토출 기준)**")
+        st.markdown("**그라인더 토출 예측량**")
         st.markdown(f"### {calculated_dose} g")
     with col_a3:
         st.markdown("**적용 모드**")
         st.markdown(f"### {extraction_mode}")
 
-    # --- 피크 압력 산출 로직 ---
+    # --- 기준 피크 압력 산출 ---
     base_pressure_calc = 15.5 - (target_grind * 1.2) - (target_dial * 0.1)
     dose_ratio = calculated_dose / bean_info['base_dose']
     adjusted_pressure = base_pressure_calc * (dose_ratio ** 1.0)
@@ -96,19 +96,16 @@ with tab1:
     estimated_peak_pressure = round(max(4.0, min(16.0, adjusted_pressure)), 1)
 
     st.markdown("---")
-    st.subheader("☕ 바스켓 5종 특성별 실측 캘리브레이션 예측 결과")
+    st.subheader("☕ 바스켓 5종 특성별 예측 결과")
     
     if estimated_peak_pressure >= 13.0:
-        pressure_status_msg = f"🔥 **[고압 실험 구간 ({estimated_peak_pressure} bar)]**: 13~14바 이상 고저항 셋팅입니다."
-        st.warning(pressure_status_msg)
+        st.warning(f"🔥 **[고압 실험 구간 ({estimated_peak_pressure} bar)]**: 고저항 셋팅입니다.")
     elif estimated_peak_pressure >= 10.0:
-        pressure_status_msg = f"🟡 **[준고압 / 고저항 구간 ({estimated_peak_pressure} bar)]**: 안정권보다 높은 저항을 주는 세팅입니다."
-        st.info(pressure_status_msg)
+        st.info(f"🟡 **[준고압 / 고저항 구간 ({estimated_peak_pressure} bar)]**: 안정권보다 높음")
     else:
-        pressure_status_msg = f"🟢 **[표준 추출 구간 ({estimated_peak_pressure} bar)]**: 밸런스가 안정적인 표준 압력 영역입니다."
-        st.success(pressure_status_msg)
+        st.success(f"🟢 **[표준 추출 구간 ({estimated_peak_pressure} bar)]**: 표준 영역입니다.")
 
-    # 표 구성 (싱글 포함 모든 바스켓 도징량을 calculated_dose로 통일)
+    # 모든 바스켓의 '예측 도징량' 열을 단일 변수 f"{calculated_dose} g"로 완전히 통일
     basket_data = {
         "바스켓 구분": [
             "★ 순정 싱글 비가압", 
@@ -126,125 +123,42 @@ with tab1:
             f"{calculated_dose} g"
         ],
         "예측 피크 압력": [
-            f"{round(max(3.0, estimated_peak_pressure + 3.7), 1)} bar", # 용적 차이로 인한 싱글 고압 반영
+            f"{round(min(16.0, estimated_peak_pressure + 3.7), 1)} bar", # 바스켓 용적 수치 차이만 반영
             f"{estimated_peak_pressure} bar", 
             f"{max(3.0, round(estimated_peak_pressure - 3.0, 1))} bar", 
             f"{max(2.5, round(estimated_peak_pressure - 5.0, 1))} bar", 
             f"{max(2.0, round(estimated_peak_pressure - 5.5, 1))} bar"
         ],
         "예측 평균 유속": [
-            f"{round(1.4 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 1)} g/s",
-            f"{round(3.2 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 1)} g/s", 
-            f"{round(3.8 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 1)} g/s", 
-            f"{round(4.5 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 1)} g/s", 
-            f"{round(4.9 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 1)} g/s"
+            f"{round(1.6 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 1)} g/s",
+            f"{round(3.7 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 1)} g/s", 
+            f"{round(4.4 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 1)} g/s", 
+            f"{round(5.2 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 1)} g/s", 
+            f"{round(5.7 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 1)} g/s"
         ]
     }
     st.dataframe(pd.DataFrame(basket_data), use_container_width=True)
 
-# 2번 탭: 매버릭 핸드밀 (약배전 모드)
+# 2번 탭
 with tab2:
     st.subheader("🛠️ Maverick Handmill Single Dosing Calibrator")
-    st.caption("오페라와 분리된 수동 싱글도징 및 클릭 수 기반 프로파일 영역입니다.")
-    
     mav_bean_list = list(st.session_state.maverick_bean_db.keys())
     selected_mav_bean = st.selectbox("핸드밀 활성 원두 선택", mav_bean_list, key="mav_select")
     mav_info = st.session_state.maverick_bean_db[selected_mav_bean]
     
     col_m1, col_m2 = st.columns(2)
-    
     with col_m1:
-        st.markdown("### 🎛️ 수동 타이핑 세팅")
-        manual_dose = st.number_input("타겟 도징량 (g)", min_value=10.0, max_value=25.0, value=mav_info.get('target_dose', 18.0), step=0.1)
-        maverick_clicks = st.number_input("핸드밀 분쇄도 (클릭 수)", min_value=1, max_value=50, value=15, step=1)
-        
+        manual_dose = st.number_input("타겟 도징량 (g)", 10.0, 25.0, mav_info.get('target_dose', 18.0), 0.1)
+        maverick_clicks = st.number_input("핸드밀 분쇄도 (클릭 수)", 1, 50, 15, 1)
     with col_m2:
-        st.markdown("### 🫘 선택된 원두 정보")
         st.info(f"**원두명:** {selected_mav_bean}\n\n**배전도:** {mav_info['roast']}\n\n**가공 방식:** {mav_info['processing']}")
 
-    st.markdown("---")
-    st.markdown("### 📈 핸드밀 4포인트 측정 결과 맵 (추후 계산식 연동 예정)")
-    st.info("타임모어 4개 포인트 데이터 기반 매버릭 핸드밀 전용 예측 맵과 그래프가 이곳에 연동될 예정입니다.")
-
-# 3번 탭: 원두 프로파일 DB 관리
+# 3번 탭
 with tab3:
     st.subheader("🫘 원두 프로파일 DB 관리")
-    
-    st.markdown("### 1️⃣ 오페라 원두 DB 관리")
-    col_db1, col_db2 = st.columns(2)
-    
-    with col_db1:
-        st.markdown("#### 오페라 원두 추가 / 수정")
-        with st.form("opera_bean_form"):
-            new_name = st.text_input("원두명 (Key)")
-            new_roast = st.selectbox("배전도", ["약배전 (Light)", "중배전 (Medium)", "강배전 (Dark)"])
-            new_grind = st.number_input("기준 분쇄도 (단)", 1.0, 10.0, 1.0, 0.5)
-            new_dial = st.number_input("기준 다이얼 (클릭)", 1.0, 30.0, 20.0, 0.5)
-            new_dose = st.number_input("실측 도징량 (g)", 10.0, 25.0, 17.8, 0.1)
-            submitted_opera = st.form_submit_button("오페라 원두 저장/업데이트")
-            
-            if submitted_opera and new_name:
-                st.session_state.bean_db[new_name] = {
-                    "roast": new_roast,
-                    "base_grind": new_grind,
-                    "base_dial": new_dial,
-                    "base_dose": new_dose
-                }
-                st.success(f"'{new_name}' 오페라 원두가 저장되었습니다!")
-                st.rerun()
+    st.dataframe(pd.DataFrame.from_dict(st.session_state.bean_db, orient='index'), use_container_width=True)
 
-    with col_db2:
-        st.markdown("#### 등록된 오페라 원두 목록")
-        st.dataframe(pd.DataFrame.from_dict(st.session_state.bean_db, orient='index'), use_container_width=True)
-        
-        del_opera_target = st.selectbox("삭제할 오페라 원두 선택", list(st.session_state.bean_db.keys()), key="del_op")
-        if st.button("선택한 오페라 원두 삭제"):
-            if len(st.session_state.bean_db) > 1:
-                del st.session_state.bean_db[del_opera_target]
-                st.success(f"'{del_opera_target}' 원두가 삭제되었습니다.")
-                st.rerun()
-            else:
-                st.warning("최소 1개의 원두는 남아있어야 합니다.")
-
-    st.markdown("---")
-    st.markdown("### 2️⃣ 매버릭 핸드밀 원두 DB 관리")
-    col_mav1, col_mav2 = st.columns(2)
-    
-    with col_mav1:
-        st.markdown("#### 핸드밀 원두 추가 / 수정")
-        with st.form("mav_bean_form"):
-            mav_name = st.text_input("핸드밀 원두명 (Key)")
-            mav_roast = st.selectbox("핸드밀 배전도", ["약배전 (Light)", "중배전 (Medium)"])
-            mav_proc = st.text_input("가공 방식", "내추럴 / 워시드")
-            mav_dose = st.number_input("기준 도징량 (g)", 10.0, 25.0, 18.0, 0.1)
-            submitted_mav = st.form_submit_button("핸드밀 원두 저장/업데이트")
-            
-            if submitted_mav and mav_name:
-                st.session_state.maverick_bean_db[mav_name] = {
-                    "roast": mav_roast,
-                    "processing": mav_proc,
-                    "target_dose": mav_dose
-                }
-                st.success(f"'{mav_name}' 핸드밀 원두가 저장되었습니다!")
-                st.rerun()
-
-    with col_mav2:
-        st.markdown("#### 등록된 핸드밀 원두 목록")
-        st.dataframe(pd.DataFrame.from_dict(st.session_state.maverick_bean_db, orient='index'), use_container_width=True)
-        
-        del_mav_target = st.selectbox("삭제할 핸드밀 원두 선택", list(st.session_state.maverick_bean_db.keys()), key="del_mav")
-        if st.button("선택한 핸드밀 원두 삭제"):
-            if len(st.session_state.maverick_bean_db) > 1:
-                del st.session_state.maverick_bean_db[del_mav_target]
-                st.success(f"'{del_mav_target}' 핸드밀 원두가 삭제되었습니다.")
-                st.rerun()
-            else:
-                st.warning("최소 1개의 원두는 남아있어야 합니다.")
-
-# 4번 탭: 2D 도징 계산 모델 설명
+# 4번 탭
 with tab4:
     st.subheader("📐 2D 도징 계산 모델 설명")
-    st.markdown("""
-    - **2샷 고정 토출 체계:** 바스켓 종류와 상관없이 동일한 타겟 분쇄도/다이얼 조건에서는 동일한 2샷 토출 도징량이 적용됩니다.
-    - **바스켓별 내압 변동:** 싱글 비가압 바스켓은 깊이(19mm)가 얕고 수용 용적이 적어 동일 도징량(17.8g)을 다져 넣었을 때 저항이 극대화되므로 피크 압력이 더 높게 형성되도록 모델링되었습니다.
-    """)
+    st.markdown("- 타겟 다이얼 세팅에 따른 예측 도징량은 바스켓 종류와 무관하게 완전히 일치합니다.")
