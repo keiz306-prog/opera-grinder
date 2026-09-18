@@ -13,8 +13,8 @@ if "bean_db" not in st.session_state:
     st.session_state.bean_db = {
         "기본 블렌드 (Default Medium)": {
             "roast": "강배전 (Dark)",
-            "base_grind": 1,
-            "base_dial": 20,
+            "base_grind": 1.0,
+            "base_dial": 20.0,
             "base_dose": 17.8
         }
     }
@@ -42,8 +42,13 @@ st.sidebar.markdown(f"- 실측 도징량: {bean_info['base_dose']}g")
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🎛️ 타겟 추출 세팅")
-target_grind = st.sidebar.slider("타겟 분쇄도 (단 - 숫자가 클수록 굵음)", 1, 10, 1)
-target_dial = st.sidebar.slider("타겟 다이얼 레벨 (클릭)", 10, 25, 20)
+
+# 타겟 분쇄도 슬라이더 (1.0~10.0, step=0.5)
+target_grind = st.sidebar.slider("타겟 분쇄도 (단 - 숫자가 클수록 굵음)", 1.0, 10.0, 1.0, step=0.5)
+
+# [수정] 타겟 다이얼 슬라이더 범위 확대 (1.0~30.0, step=0.5)
+target_dial = st.sidebar.slider("타겟 다이얼 레벨 (클릭)", 1.0, 30.0, 20.0, step=0.5)
+
 extraction_mode = st.sidebar.radio(
     "추출 모드 선택",
     ["수동 추출 (Manual - 피크 압력)", "자동 커피모드 (Coffee Mode - 약 1.5 bar 낮음)"]
@@ -78,7 +83,7 @@ with tab1:
         st.markdown("**적용 모드**")
         st.markdown(f"### {extraction_mode}")
 
-    # --- 기준값 일치 및 도징량 비례 반영 압력 산출 로직 (원본 유지) ---
+    # --- 기준값 일치 및 도징량 비례 반영 압력 산출 로직 ---
     base_pressure_calc = 15.5 - (target_grind * 1.2) - (target_dial * 0.1)
     
     dose_ratio = calculated_dose / bean_info['base_dose']
@@ -93,7 +98,7 @@ with tab1:
     st.markdown("---")
     st.subheader("☕ 바스켓 5종 특성별 실측 캘리브레이션 예측 결과 (고압 영역 포함)")
     
-    # 압력 상태에 따른 메시지 분기 (13~14바 이상 고압 실험 구간 대응)
+    # 압력 상태에 따른 메시지 분기
     if estimated_peak_pressure >= 13.0:
         pressure_status_msg = f"🔥 **[고압 실험 구간 ({estimated_peak_pressure} bar)]**: 13~14바 이상 고저항 셋팅입니다. 찌르는 산미를 억제하고 바디감을 두텁게 만들기 위한 오페라 내장 그라인더 자동 루틴 타겟 구간입니다."
         st.warning(pressure_status_msg)
@@ -104,14 +109,15 @@ with tab1:
         pressure_status_msg = f"🟢 **[표준 추출 구간 ({estimated_peak_pressure} bar)]**: 밸런스가 안정적인 표준 압력 영역입니다."
         st.success(pressure_status_msg)
 
-    # --- [수정] 순정 싱글 비가압 항목 추가 (싱글 전용 예상 도징/압력/유속 계산) ---
-    single_dose = round(calculated_dose * 0.62, 1)  # 싱글 바스켓 표준 비율 도징량 (약 11g 내외)
-    single_pressure = round(max(3.0, estimated_peak_pressure - 1.0), 1)  # 싱글 바스켓 압력 특성
+    # 순정 싱글 비가압 항목 계산
+    single_dose = round(calculated_dose * 0.62, 1)
+    single_pressure = round(max(3.0, estimated_peak_pressure - 1.0), 1)
     
+    # 바스켓 표 (모바일 최적화 명칭)
     basket_data = {
         "바스켓 구분": [
-            "★ 드롱기 순정 싱글 비가압", 
-            "드롱기 순정 더블 비가압", 
+            "★ 순정 싱글 비가압", 
+            "순정 더블 비가압", 
             "사제 일반 비가압", 
             "IMS [DL2TH26E]", 
             "iKafe 고추출"
@@ -177,8 +183,8 @@ with tab3:
         with st.form("opera_bean_form"):
             new_name = st.text_input("원두명 (Key)")
             new_roast = st.selectbox("배전도", ["약배전 (Light)", "중배전 (Medium)", "강배전 (Dark)"])
-            new_grind = st.number_input("기준 분쇄도 (단)", 1, 10, 1)
-            new_dial = st.number_input("기준 다이얼 (클릭)", 10, 30, 20)
+            new_grind = st.number_input("기준 분쇄도 (단)", 1.0, 10.0, 1.0, 0.5)
+            new_dial = st.number_input("기준 다이얼 (클릭)", 1.0, 30.0, 20.0, 0.5)
             new_dose = st.number_input("실측 도징량 (g)", 10.0, 25.0, 17.8, 0.1)
             submitted_opera = st.form_submit_button("오페라 원두 저장/업데이트")
             
@@ -244,8 +250,8 @@ with tab3:
 with tab4:
     st.subheader("📐 2D 도징 계산 모델 설명")
     st.markdown("""
-    - **분쇄도 편차 계수:** 분쇄도가 굵어질수록 공극 증가 및 밀도 변화를 반영하여 도징량이 유기적으로 보정됩니다.
-    - **다이얼 비율 계수:** 다이얼 레벨 변화에 따른 투입 부피 변동을 반영합니다.
+    - **분쇄도 편차 계수:** 분쇄도가 굵어질수록 공극 증가 및 밀도 변화를 반영하여 도징량이 유기적으로 보정됩니다. (0.5단 단위 미세조절 지원)
+    - **다이얼 비율 계수:** 다이얼 레벨 변화에 따른 투입 부피 변동을 반영합니다. (1.0~30.0까지 0.5단위 미세 조절 지원)
     - **도징-압력 정방향 연동:** 도징량이 줄어들면 퍽의 저항이 감소하여 피크 압력도 비례해서 낮아지도록 물리적 인과관계를 바로잡았습니다.
     - **고압 실험 구간 연동 (13~14바+):** 오페라 내장 그라인더의 미세 조절 한계를 극복하기 위해, 1단 부근의 고저항 구간에서 13~14바 이상의 고압 피크가 16바 스케일 내에서 정상 수용되도록 확장했습니다.
     - **매버릭 핸드밀 모드:** 싱글도징 특성에 맞춰 수동 타이핑 입력 및 독립된 원두 프로필 관리를 제공합니다.
