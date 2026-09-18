@@ -43,10 +43,7 @@ st.sidebar.markdown(f"- 실측 도징량: {bean_info['base_dose']}g")
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🎛️ 타겟 추출 세팅")
 
-# 타겟 분쇄도 슬라이더 (1.0~10.0, step=0.5)
 target_grind = st.sidebar.slider("타겟 분쇄도 (단 - 숫자가 클수록 굵음)", 1.0, 10.0, 1.0, step=0.5)
-
-# 타겟 다이얼 슬라이더 (1.0~30.0, step=0.5)
 target_dial = st.sidebar.slider("타겟 다이얼 레벨 (클릭)", 1.0, 30.0, 20.0, step=0.5)
 
 extraction_mode = st.sidebar.radio(
@@ -56,7 +53,7 @@ extraction_mode = st.sidebar.radio(
 
 # --- 메인 헤더 ---
 st.title("☕ 드롱기 라 스페셜리스타 오페라 에스프레소 추출 예측기")
-st.caption("타임모어 실측 캘리브레이션(v2.6) 및 원두 DB 관리(수정/삭제)가 통합된 스마트 시뮬레이터입니다.")
+st.caption("타임모어 실측 캘리브레이션(v2.7 - 싱글 실측 보정) 및 원두 DB 관리가 통합된 스마트 시뮬레이터입니다.")
 
 # --- 탭 구조 ---
 tab1, tab2, tab3, tab4 = st.tabs([
@@ -68,45 +65,50 @@ tab1, tab2, tab3, tab4 = st.tabs([
 
 # 1번 탭: 동적 추출 예측기 (오페라)
 with tab1:
-    st.subheader("동적 도징 & 압력/유속 예측 대시보드 (v2.6 - 도징-압력 연동 보정 완료)")
+    st.subheader("동적 도징 & 압력/유속 예측 대시보드 (v2.7 - 싱글 실측 데이터 반영)")
     
     col_a1, col_a2, col_a3 = st.columns(3)
     with col_a1:
         st.markdown("**선택된 활성 원두**")
         st.markdown(f"### {active_bean}")
     with col_a2:
-        # [수정] 다이얼 1.0 등 저다이얼 시 도징량 과다 감소 방지 (클릭당 오프셋 방식 적용)
         grind_diff = target_grind - bean_info['base_grind']
         dial_diff = target_dial - bean_info['base_dial']
         
-        # 기본 분쇄도 편차(-0.5g/단) + 다이얼 편차(+0.25g/클릭)
+        # 더블 바스켓용 도징량 계산
         calculated_dose = round(bean_info['base_dose'] - (grind_diff * 0.5) + (dial_diff * 0.25), 1)
-        calculated_dose = max(5.0, calculated_dose) # 최소 안전값 5g
+        calculated_dose = max(5.0, calculated_dose)
         
-        st.markdown("**2D 모델 예측 도징량 (2샷 토출 기준)**")
+        # [실측 보정] 싱글 바스켓용 도징량 계산 (11클릭: 12.2g, 10.5클릭: 11.2g 기준 적용)
+        single_calculated_dose = round(12.2 + (target_dial - 11.0) * 2.0 - (grind_diff * 0.3), 1)
+        single_calculated_dose = max(3.0, single_calculated_dose)
+
+        st.markdown("**2D 모델 예측 도징량 (더블 기준)**")
         st.markdown(f"### {calculated_dose} g")
     with col_a3:
         st.markdown("**적용 모드**")
         st.markdown(f"### {extraction_mode}")
 
-    # --- 압력 산출 로직 ---
+    # --- 기본 더블 압력 산출 로직 ---
     base_pressure_calc = 15.5 - (target_grind * 1.2) - (target_dial * 0.1)
-    
     dose_ratio = calculated_dose / bean_info['base_dose']
     adjusted_pressure = base_pressure_calc * (dose_ratio ** 1.0)
 
     if "자동" in extraction_mode:
         adjusted_pressure -= 1.5
     
-    # 순정 비가압 기준 예상 피크 압력 (16바 상한 캡 적용)
     estimated_peak_pressure = round(max(4.0, min(16.0, adjusted_pressure)), 1)
 
+    # [실측 보정] 싱글 비가압 피크 압력 산출 (실측 피크 압력 연동)
+    single_peak_pressure = round(max(3.0, min(16.0, 11.5 + (target_dial - 11.0) * 2.0 - (grind_diff * 0.5))), 1)
+    if "자동" in extraction_mode:
+        single_peak_pressure = round(max(3.0, single_peak_pressure - 1.5), 1)
+
     st.markdown("---")
-    st.subheader("☕ 바스켓 5종 특성별 실측 캘리브레이션 예측 결과 (고압 영역 포함)")
+    st.subheader("☕ 바스켓 5종 특성별 실측 캘리브레이션 예측 결과")
     
-    # 압력 상태에 따른 메시지 분기
     if estimated_peak_pressure >= 13.0:
-        pressure_status_msg = f"🔥 **[고압 실험 구간 ({estimated_peak_pressure} bar)]**: 13~14바 이상 고저항 셋팅입니다. 찌르는 산미를 억제하고 바디감을 두텁게 만들기 위한 오페라 내장 그라인더 자동 루틴 타겟 구간입니다."
+        pressure_status_msg = f"🔥 **[고압 실험 구간 ({estimated_peak_pressure} bar)]**: 13~14바 이상 고저항 셋팅입니다."
         st.warning(pressure_status_msg)
     elif estimated_peak_pressure >= 10.0:
         pressure_status_msg = f"🟡 **[준고압 / 고저항 구간 ({estimated_peak_pressure} bar)]**: 안정권보다 높은 저항을 주는 세팅입니다."
@@ -115,7 +117,7 @@ with tab1:
         pressure_status_msg = f"🟢 **[표준 추출 구간 ({estimated_peak_pressure} bar)]**: 밸런스가 안정적인 표준 압력 영역입니다."
         st.success(pressure_status_msg)
 
-    # [수정] 2샷 토출 고정이므로 싱글/더블 구분 없이 2D 계산 도징량 동일하게 반영
+    # 표 구성 (싱글 바스켓 실측값 적용)
     basket_data = {
         "바스켓 구분": [
             "★ 순정 싱글 비가압", 
@@ -126,21 +128,21 @@ with tab1:
         ],
         "높이 (Height)": ["19.0mm", "30.0mm", "22.0mm", "26.0mm", "25.0mm"],
         "예측 도징량": [
-            f"{calculated_dose} g",
+            f"{single_calculated_dose} g",
             f"{calculated_dose} g",
             f"{calculated_dose} g",
             f"{calculated_dose} g",
             f"{calculated_dose} g"
         ],
         "예측 피크 압력": [
-            f"{round(max(3.0, estimated_peak_pressure - 1.0), 1)} bar",
+            f"{single_peak_pressure} bar",
             f"{estimated_peak_pressure} bar", 
             f"{max(3.0, round(estimated_peak_pressure - 3.0, 1))} bar", 
             f"{max(2.5, round(estimated_peak_pressure - 5.0, 1))} bar", 
             f"{max(2.0, round(estimated_peak_pressure - 5.5, 1))} bar"
         ],
         "예측 평균 유속": [
-            f"{round(1.2 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 1)} g/s",
+            f"{round(1.0 + (target_dial * 0.02), 1)} g/s",
             f"{round(3.2 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 1)} g/s", 
             f"{round(3.8 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 1)} g/s", 
             f"{round(4.5 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 1)} g/s", 
@@ -252,9 +254,7 @@ with tab3:
 with tab4:
     st.subheader("📐 2D 도징 계산 모델 설명")
     st.markdown("""
-    - **2샷 추출 모드 고정:** 오페라 머신의 그라인더 토출량을 2샷 모드로 고정한 상태를 전제로 계산하며, 모든 바스켓에 동일한 토출 도징량이 적용됩니다.
-    - **선형 다이얼 보정:** 다이얼 1클릭 조절 시 약 0.25g의 선형 변화율을 적용하여, 슬라이더를 1.0까지 내려도 현실적인 도징량이 산출됩니다.
-    - **분쇄도 편차 계수:** 분쇄도가 굵어질수록 공극 증가 및 밀도 변화를 반영하여 도징량이 유기적으로 보정됩니다.
-    - **도징-압력 정방향 연동:** 도징량이 줄어들면 퍽의 저항이 감소하여 피크 압력도 비례해서 낮아지도록 물리적 인과관계를 바로잡았습니다.
-    - **매버릭 핸드밀 모드:** 싱글도징 특성에 맞춰 수동 타이핑 입력 및 독립된 원두 프로필 관리를 제공합니다.
+    - **싱글 비가압 실측 보정:** 제공해주신 타임모어 싱글 추출 실측 데이터(11다이얼-12.2g, 10.5다이얼-11.2g, 피크 압력 10.5~11.5 bar)를 바탕으로 싱글 전용 예측 보정식이 적용되었습니다.
+    - **더블 추출 기준 보존:** 더블 바스켓 및 사제/IMS/iKafe 바스켓용 예측 도징량 및 압력 모델은 독립적으로 유지됩니다.
+    - **슬라이더 광대역화:** 다이얼 1.0~30.0 레벨까지 0.5 단위 연속 보정을 제공합니다.
     """)
