@@ -8,7 +8,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# 1. 세션 스테이트 초기화 (오페라 원두 DB & 매버릭 핸드밀 원두 DB)
+# 1. 세션 스테이트 초기화
 if "bean_db" not in st.session_state:
     st.session_state.bean_db = {
         "기본 블렌드 (Default Medium)": {
@@ -68,7 +68,9 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "📐 2D 도징 계산 모델 설명"
 ])
 
-# 1번 탭: 동적 추출 예측기 (어제 완성된 오페라 내장 그라인더 로직 100% 보존)
+# ==========================================
+# 1번 탭: 동적 추출 예측기 (기존 코드 100% 원본 유지)
+# ==========================================
 with tab1:
     st.subheader("동적 도징 & 압력/유속 예측 대시보드")
     
@@ -80,7 +82,6 @@ with tab1:
         grind_diff = target_grind - bean_info['base_grind']
         dial_diff = target_dial - bean_info['base_dial']
         
-        # 어제 완성된 기본 2D 계산 도징량 (더블 기준)
         calculated_dose = round(bean_info['base_dose'] - (grind_diff * 0.5) + (dial_diff * 0.25), 1)
         calculated_dose = max(5.0, calculated_dose)
 
@@ -90,7 +91,6 @@ with tab1:
         st.markdown("**적용 모드**")
         st.markdown(f"### {extraction_mode}")
 
-    # 어제 완성된 기본 더블 바스켓 압력 산출 로직
     base_pressure_calc = 15.5 - (target_grind * 1.2) - (target_dial * 0.1)
     dose_ratio = calculated_dose / bean_info['base_dose']
     adjusted_pressure = base_pressure_calc * (dose_ratio ** 1.0)
@@ -99,8 +99,6 @@ with tab1:
         adjusted_pressure -= 1.5
     
     estimated_peak_pressure = round(max(4.0, min(16.0, adjusted_pressure)), 1)
-
-    # 어제 완성된 순정 싱글 비가압 연동 수식
     single_peak_pressure = round(min(16.0, estimated_peak_pressure + 2.8), 1)
 
     st.markdown("---")
@@ -116,10 +114,8 @@ with tab1:
         pressure_status_msg = f"🟢 **[표준 추출 구간 ({estimated_peak_pressure} bar)]**: 밸런스가 안정적인 표준 압력 영역입니다."
         st.success(pressure_status_msg)
 
-    # 더블 기준 기본 유속
     base_flow = round(3.2 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 2)
 
-    # 1번 탭 표 구성
     basket_data = {
         "바스켓 구분": [
             "★ 순정 싱글 비가압", 
@@ -153,7 +149,9 @@ with tab1:
     }
     st.dataframe(pd.DataFrame(basket_data), use_container_width=True)
 
-# 2번 탭: 매버릭 핸드밀 (약배전 모드 - 순정 더블 가중치 보정)
+# ==========================================
+# 2번 탭: 매버릭 핸드밀 (1번 탭과 오프셋 일치 수치 반영)
+# ==========================================
 with tab2:
     st.subheader("🛠️ Maverick Handmill Single Dosing Calibrator (Dry Filter Baseline)")
     st.caption("수막 현상을 유발하는 린싱(Wet) 데이터를 배제하고, 마른 필터(Dry) 기준 실측 데이터 기반으로 캘리브레이션합니다.")
@@ -206,19 +204,20 @@ with tab2:
     click_diff = maverick_clicks - 77
     dose_factor = manual_dose / 16.0
     
+    # 기준인 [사제 일반 비가압]의 실측 압력 및 유속 (11.0 bar 기준)
     base_mav_pressure = 11.0 - (click_diff * 0.4) * dose_factor
     base_mav_flow = 1.0 + (click_diff * 0.08) / dose_factor
     
-    # ★ 2번 탭에서 순정 더블 비가압의 가중치를 +0.6 bar로 보정한 테이블 ★
+    # 1번 탭의 저항 오프셋 메커니즘 수식 적용
     mav_basket_data = {
         "바스켓 구분": [
-            "사제 일반 비가압 (★ 기준 바스켓)",
-            "★ 순정 싱글 비가압",
+            "사제 일반 비가압 (★ 실측 기준)",
             "순정 더블 비가압",
+            "★ 순정 싱글 비가압",
             "IMS [DL2TH26E]",
             "iKafe 고추출"
         ],
-        "바스켓 높이": ["22.0 mm", "19.0 mm", "30.0 mm", "26.0 mm", "25.0 mm"],
+        "바스켓 높이": ["22.0 mm", "30.0 mm", "19.0 mm", "26.0 mm", "25.0 mm"],
         "도징량 (Single Dosing)": [
             f"{manual_dose} g", 
             f"{manual_dose} g", 
@@ -227,23 +226,23 @@ with tab2:
             f"{manual_dose} g"
         ],
         "예측 피크 압력": [
-            f"{max(2.0, round(base_mav_pressure, 1))} bar", 
-            f"{max(2.0, round(base_mav_pressure + 2.8, 1))} bar",                    # 순정 싱글 (+2.8 bar)
-            f"{max(2.0, round(base_mav_pressure + 0.6, 1))} bar",                    # 보정: 순정 더블 (+0.6 bar)
-            f"{max(2.0, round(base_mav_pressure - 1.7, 1))} bar", 
-            f"{max(2.0, round(base_mav_pressure - 2.3, 1))} bar"
+            f"{max(2.0, round(base_mav_pressure, 1))} bar",                              # 기준: 11.0 bar
+            f"{min(16.0, round(base_mav_pressure + 3.0, 1))} bar",                       # 순정 더블: +3.0 bar (14.0 bar)
+            f"{min(16.0, round(base_mav_pressure + 5.8, 1))} bar",                       # 순정 싱글: +5.8 bar (16.0 bar 제한)
+            f"{max(2.0, round(base_mav_pressure - 2.0, 1))} bar",                        # IMS: -2.0 bar (9.0 bar)
+            f"{max(2.0, round(base_mav_pressure - 2.5, 1))} bar"                         # iKafe: -2.5 bar (8.5 bar)
         ],
         "예측 평균 유속": [
-            f"{round(base_mav_flow, 2)} g/s", 
-            f"{round(base_mav_flow * 0.65, 2)} g/s", 
-            f"{round(base_mav_flow * 0.92, 2)} g/s",                                 # 유속 보정
-            f"{round(base_mav_flow * 1.21, 2)} g/s", 
-            f"{round(base_mav_flow * 1.33, 2)} g/s"
+            f"{round(base_mav_flow, 2)} g/s",                                           # 기준 1.00 g/s
+            f"{round(base_mav_flow * 0.85, 2)} g/s",                                    # 순정 더블
+            f"{round(base_mav_flow * 0.55, 2)} g/s",                                    # 순정 싱글
+            f"{round(base_mav_flow * 1.18, 2)} g/s",                                    # IMS
+            f"{round(base_mav_flow * 1.30, 2)} g/s"                                     # iKafe
         ],
         "바스켓 특성 가이드": [
             "핸드밀 약배전 실측 검증 기준 바스켓. 77~78클릭에서 최상 밸런스",
-            "동일 도징 투입 시 좁고 깊은 구조로 인해 초고저항 발생 (79클릭 이상 권장)",
-            "홀 밀도가 사제보다 약간 낮아 저항이 소폭 높음",
+            "사제 대비 타공 면적이 좁아 동일 도징 시 저항이 +3.0 bar 높음 (14.0 bar 도달)",
+            "동일 도징 투입 시 좁고 깊은 테이퍼 구조로 초고저항 발생 (79클릭 이상 권장)",
             "타공 면적이 넓어 고유속 추출. 75~76클릭으로 미세 조정 권장",
             "최고 유속 바스켓. 약배전의 밝은 산미 표현에 유리"
         ]
@@ -251,7 +250,9 @@ with tab2:
     
     st.dataframe(pd.DataFrame(mav_basket_data), use_container_width=True)
 
+# ==========================================
 # 3번 탭: 원두 프로파일 DB 관리
+# ==========================================
 with tab3:
     st.subheader("🫘 원두 프로파일 DB 관리")
     
@@ -326,11 +327,13 @@ with tab3:
             else:
                 st.warning("최소 1개의 원두는 남아있어야 합니다.")
 
+# ==========================================
 # 4번 탭: 2D 도징 계산 모델 설명
+# ==========================================
 with tab4:
     st.subheader("📐 2D 도징 계산 모델 및 Dry Filter 프로파일 설명")
     st.markdown("""
     - **노-린싱(Dry) 필터 기틀 확립:** 하단 종이 필터 린싱 시 발생하는 수막 흡착(Water Film Lock) 변수를 완전 배제하고, 마른 필터 기준으로 매버릭 핸드밀 약배전 영점을 재구축했습니다.
     - **매버릭 4포인트 실측 맵:** 과테말라 와이칸 16.0g 기준 75~78클릭의 비선형 유속 완충 구간(76클릭)과 농도/향미 개별 스윗스팟(77, 78클릭)을 정밀하게 연동했습니다.
-    - **핸드밀 싱글 도징 물리 모델:** 핸드밀 탭은 16.0g 원두를 고정 투입하는 싱글 도징 조건을 기본으로 하므로, 모든 바스켓에 동일 도징량이 담길 때 생기는 바스켓 형태별 저항 차이(싱글 바스켓의 과도한 퍽 깊이 등)를 정밀 계산합니다.
+    - **핸드밀 싱글 도징 물리 모델:** 핸드밀 탭은 16.0g 원두를 고정 투입하는 싱글 도징 조건을 기본으로 하므로, 모든 바스켓에 동일 도징량이 담길 때 생기는 바스켓 형태별 저항 차이(순정 더블 대비 사제 비가압의 -3.0 bar 저항 감소 등)를 정밀 계산합니다.
     """)
