@@ -1,4 +1,23 @@
 {
+    "global_anchors": [
+        [
+            10.5,
+            11.3
+        ],
+        [
+            11.0,
+            12.4
+        ],
+        [
+            20.0,
+            17.8
+        ],
+        [
+            0.0,
+            0.0
+        ]
+    ],
+    "global_anchor_bean_name": "컬트커피랩 코즈블랜드 26/09/10",
     "bean_db": {
         "기본 블렌드 (Default Medium)": {
             "roast": "중배전 (Medium)",
