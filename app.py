@@ -276,7 +276,7 @@ with tab2:
     st.dataframe(pd.DataFrame(mav_basket_data), use_container_width=True)
 
 # ==========================================
-# 3번 탭: 원두 프로파일 DB 관리 (로스팅 날짜 추가 & UI 정리)
+# 3번 탭: 원두 프로파일 DB 관리 (표 컬럼 명시적 매핑)
 # ==========================================
 with tab3:
     st.subheader("🫘 원두 프로파일 DB 관리")
@@ -308,7 +308,16 @@ with tab3:
 
     with col_db2:
         st.markdown("#### 등록된 오페라 원두 목록")
-        st.dataframe(pd.DataFrame.from_dict(st.session_state.bean_db, orient='index'), use_container_width=True)
+        # 데이터프레임 변환 및 컬럼 한글명/순서 명시적 정의
+        opera_df = pd.DataFrame.from_dict(st.session_state.bean_db, orient='index')
+        opera_df = opera_df.rename(columns={
+            "roast": "배전도",
+            "roast_date": "로스팅 날짜",
+            "base_grind": "기준 분쇄도(단)",
+            "base_dial": "기준 다이얼(클릭)",
+            "base_dose": "실측 도징량(g)"
+        })
+        st.dataframe(opera_df, use_container_width=True)
         
         del_opera_target = st.selectbox("삭제할 오페라 원두 선택", list(st.session_state.bean_db.keys()), key="del_op")
         if st.button("선택한 오페라 원두 삭제"):
@@ -350,7 +359,17 @@ with tab3:
 
     with col_mav2:
         st.markdown("#### 등록된 핸드밀 원두 목록")
-        st.dataframe(pd.DataFrame.from_dict(st.session_state.maverick_bean_db, orient='index'), use_container_width=True)
+        # 데이터프레임 변환 및 컬럼 한글명/순서 명시적 정의
+        mav_df = pd.DataFrame.from_dict(st.session_state.maverick_bean_db, orient='index')
+        mav_df = mav_df.rename(columns={
+            "roast": "배전도",
+            "processing": "가공 방식",
+            "roast_date": "로스팅 날짜",
+            "ref_click": "측정 클릭 수",
+            "ref_pressure": "실측 피크 압력(bar)",
+            "target_dose": "실측 도징량(g)"
+        })
+        st.dataframe(mav_df, use_container_width=True)
         
         del_mav_target = st.selectbox("삭제할 핸드밀 원두 선택", list(st.session_state.maverick_bean_db.keys()), key="del_mav")
         if st.button("선택한 핸드밀 원두 삭제"):
