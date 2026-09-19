@@ -68,9 +68,9 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "📐 2D 도징 계산 모델 설명"
 ])
 
-# 1번 탭: 동적 추출 예측기 (오페라 내장 그라인더 기준)
+# 1번 탭: 동적 추출 예측기 (어제 완성된 오페라 내장 그라인더 로직 100% 보존)
 with tab1:
-    st.subheader("동적 도징 & 압력/유속 예측 대시보드 (v2.8 - 싱글 물리 모델 정밀 보정)")
+    st.subheader("동적 도징 & 압력/유속 예측 대시보드")
     
     col_a1, col_a2, col_a3 = st.columns(3)
     with col_a1:
@@ -80,7 +80,7 @@ with tab1:
         grind_diff = target_grind - bean_info['base_grind']
         dial_diff = target_dial - bean_info['base_dial']
         
-        # 기본 2D 계산 도징량 (더블 기준)
+        # 어제 완성된 기본 2D 계산 도징량 (더블 기준)
         calculated_dose = round(bean_info['base_dose'] - (grind_diff * 0.5) + (dial_diff * 0.25), 1)
         calculated_dose = max(5.0, calculated_dose)
 
@@ -90,7 +90,7 @@ with tab1:
         st.markdown("**적용 모드**")
         st.markdown(f"### {extraction_mode}")
 
-    # --- 기본 더블 바스켓 압력 산출 로직 ---
+    # 어제 완성된 기본 더블 바스켓 압력 산출 로직
     base_pressure_calc = 15.5 - (target_grind * 1.2) - (target_dial * 0.1)
     dose_ratio = calculated_dose / bean_info['base_dose']
     adjusted_pressure = base_pressure_calc * (dose_ratio ** 1.0)
@@ -100,8 +100,7 @@ with tab1:
     
     estimated_peak_pressure = round(max(4.0, min(16.0, adjusted_pressure)), 1)
 
-    # ★ [보정] 순정 싱글 비가압 피크 압력 및 유속 정밀 연동 모델 ★
-    # 싱글 바스켓 구조 특성상 동일 도징/분쇄 조건에서 더블 대비 피크 압력이 +2.8 bar 높게 형성됨
+    # 어제 완성된 순정 싱글 비가압 연동 수식
     single_peak_pressure = round(min(16.0, estimated_peak_pressure + 2.8), 1)
 
     st.markdown("---")
@@ -120,7 +119,7 @@ with tab1:
     # 더블 기준 기본 유속
     base_flow = round(3.2 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 2)
 
-    # 표 구성
+    # 1번 탭 표 구성
     basket_data = {
         "바스켓 구분": [
             "★ 순정 싱글 비가압", 
@@ -138,14 +137,14 @@ with tab1:
             f"{calculated_dose} g"
         ],
         "예측 피크 압력": [
-            f"{single_peak_pressure} bar",                                          # 더블 대비 +2.8 bar 확연한 차이 반영
-            f"{estimated_peak_pressure} bar",                                       # 기준 더블
+            f"{single_peak_pressure} bar", 
+            f"{estimated_peak_pressure} bar", 
             f"{max(3.0, round(estimated_peak_pressure - 3.0, 1))} bar", 
             f"{max(2.5, round(estimated_peak_pressure - 5.0, 1))} bar", 
             f"{max(2.0, round(estimated_peak_pressure - 5.5, 1))} bar"
         ],
         "예측 평균 유속": [
-            f"{round(base_flow * 0.65, 2)} g/s",                                    # 고저항으로 인한 유속 감쇄 반영
+            f"{round(base_flow * 0.65, 2)} g/s", 
             f"{base_flow} g/s", 
             f"{round(base_flow * 1.18, 2)} g/s", 
             f"{round(base_flow * 1.40, 2)} g/s", 
@@ -154,7 +153,7 @@ with tab1:
     }
     st.dataframe(pd.DataFrame(basket_data), use_container_width=True)
 
-# 2번 탭: 매버릭 핸드밀 (약배전 모드)
+# 2번 탭: 매버릭 핸드밀 (약배전 모드 - 순정 더블 가중치 보정)
 with tab2:
     st.subheader("🛠️ Maverick Handmill Single Dosing Calibrator (Dry Filter Baseline)")
     st.caption("수막 현상을 유발하는 린싱(Wet) 데이터를 배제하고, 마른 필터(Dry) 기준 실측 데이터 기반으로 캘리브레이션합니다.")
@@ -177,7 +176,6 @@ with tab2:
     st.markdown("---")
     st.markdown("### 📈 매버릭 핸드밀 약배전 실측 4포인트 데이터 맵 (16.0g / Dry Filter 기준)")
     
-    # 75~78클릭 실측 DB 정의
     dry_data_df = pd.DataFrame({
         "클릭 수": ["75 클릭", "76 클릭", "77 클릭 (★ 스윗스팟 A)", "78 클릭 (★ 스윗스팟 B)"],
         "추출 시간": ["37 초", "45 초", "37 초", "34 초"],
@@ -188,7 +186,6 @@ with tab2:
     })
     st.dataframe(dry_data_df, use_container_width=True)
 
-    # 선택된 클릭에 따른 실시간 가이드
     st.markdown("#### 🎯 선택된 분쇄도 상태 진단")
     if maverick_clicks == 75:
         st.info("🥤 **[75클릭 - 고농도 텍스처]**: 37초 / 36.8g. 11 bar 고압이 유지되어 단맛이 강하고 진한 주스 같은 질감을 줍니다.")
@@ -203,7 +200,6 @@ with tab2:
     else:
         st.info("💡 **[79클릭 이상 - 라이트 추출]**: 30초 대 안팎으로 빠른 유속을 보여주며, 가벼운 바디감과 라이트한 향미 위주로 추출됩니다.")
 
-    # --- 동일 도징량(16.0g 싱글도징) 적용 5종 바스켓 예측 시뮬레이터 ---
     st.markdown("---")
     st.markdown(f"### 🥣 현재 핸드밀 세팅 ({maverick_clicks}클릭 / {manual_dose}g 싱글도징) 기준 5종 바스켓별 예측 시뮬레이션")
     
@@ -213,6 +209,7 @@ with tab2:
     base_mav_pressure = 11.0 - (click_diff * 0.4) * dose_factor
     base_mav_flow = 1.0 + (click_diff * 0.08) / dose_factor
     
+    # ★ 2번 탭에서 순정 더블 비가압의 가중치를 +0.6 bar로 보정한 테이블 ★
     mav_basket_data = {
         "바스켓 구분": [
             "사제 일반 비가압 (★ 기준 바스켓)",
@@ -231,22 +228,22 @@ with tab2:
         ],
         "예측 피크 압력": [
             f"{max(2.0, round(base_mav_pressure, 1))} bar", 
-            f"{max(2.0, round(base_mav_pressure + 2.8, 1))} bar", 
-            f"{max(2.0, round(base_mav_pressure + 2.5, 1))} bar", 
+            f"{max(2.0, round(base_mav_pressure + 2.8, 1))} bar",                    # 순정 싱글 (+2.8 bar)
+            f"{max(2.0, round(base_mav_pressure + 0.6, 1))} bar",                    # 보정: 순정 더블 (+0.6 bar)
             f"{max(2.0, round(base_mav_pressure - 1.7, 1))} bar", 
             f"{max(2.0, round(base_mav_pressure - 2.3, 1))} bar"
         ],
         "예측 평균 유속": [
             f"{round(base_mav_flow, 2)} g/s", 
             f"{round(base_mav_flow * 0.65, 2)} g/s", 
-            f"{round(base_mav_flow * 0.83, 2)} g/s", 
+            f"{round(base_mav_flow * 0.92, 2)} g/s",                                 # 유속 보정
             f"{round(base_mav_flow * 1.21, 2)} g/s", 
             f"{round(base_mav_flow * 1.33, 2)} g/s"
         ],
         "바스켓 특성 가이드": [
             "핸드밀 약배전 실측 검증 기준 바스켓. 77~78클릭에서 최상 밸런스",
             "동일 도징 투입 시 좁고 깊은 구조로 인해 초고저항 발생 (79클릭 이상 권장)",
-            "홀 밀도가 사제보다 낮아 저항이 더 세게 걸림 (고압 주의)",
+            "홀 밀도가 사제보다 약간 낮아 저항이 소폭 높음",
             "타공 면적이 넓어 고유속 추출. 75~76클릭으로 미세 조정 권장",
             "최고 유속 바스켓. 약배전의 밝은 산미 표현에 유리"
         ]
