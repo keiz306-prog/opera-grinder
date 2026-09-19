@@ -156,7 +156,7 @@ with tab1:
     }
     st.dataframe(pd.DataFrame(basket_data), use_container_width=True)
 
-# 2번 탭: 매버릭 핸드밀 (약배전 모드) - ★ 범위 50까지 확장 & 사제 일반 비가압 기준 적용 ★
+# 2번 탭: 매버릭 핸드밀 (약배전 모드)
 with tab2:
     st.subheader("🛠️ Maverick Handmill Single Dosing Calibrator (Dry Filter Baseline)")
     st.caption("수막 현상을 유발하는 린싱(Wet) 데이터를 배제하고, 마른 필터(Dry) 기준 실측 데이터 기반으로 캘리브레이션합니다.")
@@ -170,7 +170,6 @@ with tab2:
     with col_m1:
         st.markdown("### 🎛️ 추출 세팅 컨트롤")
         manual_dose = st.number_input("타겟 도징량 (g)", min_value=10.0, max_value=25.0, value=mav_info.get('target_dose', 16.0), step=0.1)
-        # 분쇄도 최저치 50으로 넓힘
         maverick_clicks = st.slider("핸드밀 분쇄도 (클릭 수)", min_value=50, max_value=85, value=77, step=1)
         
     with col_m2:
@@ -206,12 +205,11 @@ with tab2:
     else:
         st.info("💡 **[79클릭 이상 - 라이트 추출]**: 30초 대 안팎으로 빠른 유속을 보여주며, 가벼운 바디감과 라이트한 향미 위주로 추출됩니다.")
 
-    # --- ★ [NEW & MODIFIED] 사제 일반 비가압을 '기준 바스켓'으로 설정한 5종 바스켓 예측 시뮬레이터 ★ ---
+    # --- ★ [수정 완료] 동일 도징량(16.0g 싱글도징) 적용 5종 바스켓 예측 시뮬레이터 ★ ---
     st.markdown("---")
-    st.markdown(f"### 🥣 현재 핸드밀 세팅 ({maverick_clicks}클릭 / {manual_dose}g) 기준 5종 바스켓별 예측 시뮬레이션")
+    st.markdown(f"### 🥣 현재 핸드밀 세팅 ({maverick_clicks}클릭 / {manual_dose}g 싱글도징) 기준 5종 바스켓별 예측 시뮬레이션")
     
-    # 클릭 기반 피크 압력/유속 계산 산출식 (실측 데이터 기반: 기준 바스켓 = 사제 일반 비가압)
-    # 77클릭 사제 일반 비가압 기준 11.0 bar / 1.0 g/s
+    # 클릭 기반 피크 압력/유속 계산 산출식 (기준 바스켓 = 사제 일반 비가압)
     click_diff = maverick_clicks - 77
     dose_factor = manual_dose / 16.0
     
@@ -227,30 +225,31 @@ with tab2:
             "iKafe 고추출"
         ],
         "바스켓 높이": ["22.0 mm", "19.0 mm", "30.0 mm", "26.0 mm", "25.0 mm"],
-        "권장 도징량": [
+        # 핸드밀 싱글 도징이므로 모든 바스켓에 설정 도징량 100% 동일 적용
+        "도징량 (Single Dosing)": [
             f"{manual_dose} g", 
-            f"{round(manual_dose * 0.76, 1)} g",  # 싱글 적정 도징 환산
+            f"{manual_dose} g", 
             f"{manual_dose} g", 
             f"{manual_dose} g", 
             f"{manual_dose} g"
         ],
         "예측 피크 압력": [
             f"{max(2.0, round(base_mav_pressure, 1))} bar",                             # 기준 (사제 일반)
-            f"{max(2.0, round(base_mav_pressure + 0.8, 1))} bar",                         # 싱글 비가압 (고저항)
-            f"{max(2.0, round(base_mav_pressure + 2.5, 1))} bar",                         # 순정 더블 (홀밀도 낮아 압력 높음)
+            f"{max(2.0, round(base_mav_pressure + 2.8, 1))} bar",                         # 싱글 비가압 (16g 과도징으로 퍽 두께 상승 -> 최고 고저항)
+            f"{max(2.0, round(base_mav_pressure + 2.5, 1))} bar",                         # 순정 더블 (홀밀도 낮아 높은 압력)
             f"{max(2.0, round(base_mav_pressure - 1.7, 1))} bar",                         # IMS
             f"{max(2.0, round(base_mav_pressure - 2.3, 1))} bar"                          # iKafe
         ],
         "예측 평균 유속": [
             f"{round(base_mav_flow, 2)} g/s",                                           # 기준 (사제 일반)
-            f"{round(base_mav_flow * 0.85, 2)} g/s",                                      # 싱글 비가압
+            f"{round(base_mav_flow * 0.65, 2)} g/s",                                      # 싱글 비가압 (높은 저항으로 유속 대폭 감소)
             f"{round(base_mav_flow * 0.83, 2)} g/s",                                      # 순정 더블
             f"{round(base_mav_flow * 1.21, 2)} g/s",                                      # IMS
             f"{round(base_mav_flow * 1.33, 2)} g/s"                                       # iKafe
         ],
         "바스켓 특성 가이드": [
             "핸드밀 약배전 실측 검증 기준 바스켓. 77~78클릭에서 최상 밸런스",
-            "소량 추출 전용. 12g 내외 도징 시 적정 압력 및 유속 형성",
+            "16g 투입 시 좁고 깊은 구조로 인해 초고저항 발생 (79클릭 이상 권장)",
             "홀 밀도가 사제보다 낮아 저항이 더 세게 걸림 (고압 주의)",
             "타공 면적이 넓어 고유속 추출. 75~76클릭으로 미세 조정 권장",
             "최고 유속 바스켓. 약배전의 밝은 산미 표현에 유리"
@@ -329,7 +328,7 @@ with tab3:
         if st.button("선택한 핸드밀 원두 삭제"):
             if len(st.session_state.maverick_bean_db) > 1:
                 del st.session_state.maverick_bean_db[del_mav_target]
-                st.success(f"'{del_mav_target}' 원두가 삭제되었습니다.")
+                st.success(f"'{del_mav_target}' 핸드밀 원두가 삭제되었습니다.")
                 st.rerun()
             else:
                 st.warning("최소 1개의 원두는 남아있어야 합니다.")
@@ -340,5 +339,5 @@ with tab4:
     st.markdown("""
     - **노-린싱(Dry) 필터 기틀 확립:** 하단 종이 필터 린싱 시 발생하는 수막 흡착(Water Film Lock) 변수를 완전 배제하고, 마른 필터 기준으로 매버릭 핸드밀 약배전 영점을 재구축했습니다.
     - **매버릭 4포인트 실측 맵:** 과테말라 와이칸 16.0g 기준 75~78클릭의 비선형 유속 완충 구간(76클릭)과 농도/향미 개별 스윗스팟(77, 78클릭)을 정밀하게 연동했습니다.
-    - **사제 일반 비가압 기준 보정:** 핸드밀 탭은 '사제 일반 비가압 바스켓'을 기준점(11 bar/1.0 g/s)으로 삼아 순정 더블/싱글, IMS, iKafe 등의 상대적 유속과 피크 압력을 예측합니다.
+    - **핸드밀 싱글 도징 물리 모델:** 핸드밀 탭은 16.0g 원두를 고정 투입하는 싱글 도징 조건을 기본으로 하므로, 모든 바스켓에 동일 도징량이 담길 때 생기는 바스켓 형태별 저항 차이(싱글 바스켓의 과도한 퍽 깊이 등)를 정밀 계산합니다.
     """)
