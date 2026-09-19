@@ -1,46 +1,122 @@
 import streamlit as st
 import pandas as pd
+import json
+import os
 from datetime import datetime
 
-# 페이지 설정
+# 페이지 기본 설정
 st.set_page_config(
     page_title="드롱기 라 스페셜리스타 오페라 에스프레소 추출 예측기",
     page_icon="☕",
     layout="wide"
 )
 
-# 1. 세션 스테이트 초기화 (내장 그라인더 DB)
-if "bean_db" not in st.session_state:
-    st.session_state.bean_db = {
-        "기본 블렌드 (Default Medium)": {
-            "roast": "강배전 (Dark)",
-            "roast_date": str(datetime.now().date()),
-            "base_grind": 1.0,
-            "base_dial": 20.0,
-            "base_dose": 17.8
-        }
-    }
+DB_FILE_PATH = "beans_db.json"
 
-# 2. 세션 스테이트 초기화 (매버릭 핸드밀 DB)
-if "maverick_bean_db" not in st.session_state:
-    st.session_state.maverick_bean_db = {
-        "과테말라 와이칸 (Wykan)": {
-            "roast": "약배전 (Light)",
-            "processing": "워시드 (Washed)",
-            "roast_date": str(datetime.now().date()),
-            "ref_click": 77,
-            "ref_pressure": 11.0,
-            "target_dose": 16.0
-        },
-        "에티오피아 예가체프 내추럴": {
-            "roast": "약배전 (Light)",
-            "processing": "내추럴 (Natural)",
-            "roast_date": str(datetime.now().date()),
-            "ref_click": 77,
-            "ref_pressure": 10.5,
-            "target_dose": 18.0
+# --- 기본 그라인더 기계 고유 패턴 (기준 원두 1.0단 / 20.0클릭 / 17.8g 기준) ---
+DEFAULT_MECHANISM_ANCHORS = [
+    [10.5, 11.3],
+    [11.0, 12.4],
+    [15.0, 14.8],
+    [20.0, 17.8]
+]
+
+# --- 세션 스테이트 및 JSON DB 로드/저장 안전 장치 ---
+def init_session_state():
+    if os.path.exists(DB_FILE_PATH):
+        try:
+            with open(DB_FILE_PATH, "r", encoding="utf-8") as f:
+                saved_data = json.load(f)
+                if "bean_db" in saved_data:
+                    st.session_state.bean_db = saved_data["bean_db"]
+                if "maverick_bean_db" in saved_data:
+                    st.session_state.maverick_bean_db = saved_data["maverick_bean_db"]
+        except Exception:
+            pass
+
+    if "bean_db" not in st.session_state or not st.session_state.bean_db:
+        st.session_state.bean_db = {
+            "기본 블렌드 (Default Medium)": {
+                "roast": "강배전 (Dark)",
+                "roast_date": str(datetime.now().date()),
+                "base_grind": 1.0,
+                "base_dial": 20.0,
+                "base_dose": 17.8,
+                "base_pressure": 11.5,
+                "add_dial": 0.0,
+                "add_dose": 0.0
+            }
         }
+
+    if "maverick_bean_db" not in st.session_state or not st.session_state.maverick_bean_db:
+        st.session_state.maverick_bean_db = {
+            "과테말라 와이칸 (Wykan)": {
+                "roast": "약배전 (Light)",
+                "processing": "워시드 (Washed)",
+                "roast_date": str(datetime.now().date()),
+                "ref_click": 77,
+                "ref_pressure": 11.0,
+                "target_dose": 16.0
+            },
+            "에티오피아 예가체프 내추럴": {
+                "roast": "약배전 (Light)",
+                "processing": "내추럴 (Natural)",
+                "roast_date": str(datetime.now().date()),
+                "ref_click": 77,
+                "ref_pressure": 10.5,
+                "target_dose": 18.0
+            }
+        }
+
+def save_data():
+    data_to_save = {
+        "bean_db": st.session_state.bean_db,
+        "maverick_bean_db": st.session_state.maverick_bean_db
     }
+    with open(DB_FILE_PATH, "w", encoding="utf-8") as f:
+        json.dump(data_to_save, f, ensure_ascii=False, indent=4)
+
+# 초기화 실행
+init_session_state()
+
+# --- 구간 보간 및 선택적 추가 앵커 계산 로직 ---
+def calculate_bean_dose(target_dial, bean_info):
+    base_dose = float(bean_info.get('base_dose', 17.8))
+    offset = base_dose - 17.8  
+    
+    effective_anchors = [[dial, dose + offset] for dial, dose in DEFAULT_MECHANISM_ANCHORS]
+    
+    add_dial = float(bean_info.get("add_dial", 0.0))
+    add_dose = float(bean_info.get("add_dose", 0.0))
+    
+    # 추가 보정값이 유효하게 존재하는 경우에만 앵커에 병합/반영
+    if add_dial > 0.0 and add_dose > 0.0:
+        updated = False
+        for i in range(len(effective_anchors)):
+            if effective_anchors[i][0] == add_dial:
+                effective_anchors[i][1] = add_dose
+                updated = True
+                break
+        if not updated:
+            effective_anchors.append([add_dial, add_dose])
+            
+    sorted_pts = sorted(effective_anchors, key=lambda x: x[0])
+    
+    if target_dial <= sorted_pts[0][0]:
+        slope = (sorted_pts[1][1] - sorted_pts[0][1]) / (sorted_pts[1][0] - sorted_pts[0][0])
+        val = sorted_pts[0][1] + (target_dial - sorted_pts[0][0]) * slope
+    elif target_dial >= sorted_pts[-1][0]:
+        slope = (sorted_pts[-1][1] - sorted_pts[-2][1]) / (sorted_pts[-1][0] - sorted_pts[-2][0])
+        val = sorted_pts[-1][1] + (target_dial - sorted_pts[-1][0]) * slope
+    else:
+        for i in range(len(sorted_pts) - 1):
+            x1, y1 = sorted_pts[i]
+            x2, y2 = sorted_pts[i+1]
+            if x1 <= target_dial <= x2:
+                slope = (y2 - y1) / (x2 - x1)
+                val = y1 + (target_dial - x1) * slope
+                break
+    return val
 
 # --- 사이드바 (오페라 모드) ---
 st.sidebar.markdown("### ⚙️ 원두 및 세팅 컨트롤러")
@@ -54,6 +130,15 @@ st.sidebar.markdown(f"- 로스팅 날짜: {bean_info.get('roast_date', '미지�
 st.sidebar.markdown(f"- 기준 분쇄도: {bean_info['base_grind']}단")
 st.sidebar.markdown(f"- 기준 다이얼: {bean_info['base_dial']}클릭")
 st.sidebar.markdown(f"- 실측 도징량: {bean_info['base_dose']}g")
+st.sidebar.markdown(f"- 실측 피크 압력: {bean_info.get('base_pressure', 11.5)} bar")
+
+# 좌측 사이드바에 추가 보정값 표시
+add_d = float(bean_info.get('add_dial', 0.0))
+add_g = float(bean_info.get('add_dose', 0.0))
+if add_d > 0.0 and add_g > 0.0:
+    st.sidebar.markdown(f"- 추가 보정값: **{add_d}클릭 ➔ {add_g}g**")
+else:
+    st.sidebar.markdown(f"- 추가 보정값: **없음 (기본 패턴 적용)**")
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🎛️ 타겟 추출 세팅")
@@ -89,10 +174,9 @@ with tab1:
         st.markdown("**선택된 활성 원두**")
         st.markdown(f"### {active_bean}")
     with col_a2:
-        grind_diff = target_grind - bean_info['base_grind']
-        dial_diff = target_dial - bean_info['base_dial']
-        
-        calculated_dose = round(bean_info['base_dose'] - (grind_diff * 0.5) + (dial_diff * 0.25), 1)
+        interpolated_dose = calculate_bean_dose(target_dial, bean_info)
+        grind_diff = target_grind - bean_info.get('base_grind', 1.0)
+        calculated_dose = round(interpolated_dose - (grind_diff * 0.3), 1)
         calculated_dose = max(5.0, calculated_dose)
 
         st.markdown("**2D 모델 예측 도징량**")
@@ -101,9 +185,11 @@ with tab1:
         st.markdown("**적용 모드**")
         st.markdown(f"### {extraction_mode}")
 
-    base_pressure_calc = 15.5 - (target_grind * 1.2) - (target_dial * 0.1)
-    dose_ratio = calculated_dose / bean_info['base_dose']
-    adjusted_pressure = base_pressure_calc * (dose_ratio ** 1.0)
+    raw_base_press = float(bean_info.get('base_pressure', 11.5))
+    dial_diff = target_dial - float(bean_info.get('base_dial', 20.0))
+    base_pressure_calc = raw_base_press - (grind_diff * 1.2) - (dial_diff * 0.15)
+    dose_ratio = calculated_dose / max(float(bean_info['base_dose']), 5.0)
+    adjusted_pressure = base_pressure_calc * (dose_ratio ** 0.8)
 
     if "자동" in extraction_mode:
         adjusted_pressure -= 1.5
@@ -124,7 +210,7 @@ with tab1:
         pressure_status_msg = f"🟢 **[표준 추출 구간 ({estimated_peak_pressure} bar)]**: 밸런스가 안정적인 표준 압력 영역입니다."
         st.success(pressure_status_msg)
 
-    base_flow = round(3.2 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 2)
+    base_flow = round(3.2 * (float(bean_info['base_dose']) / max(calculated_dose, 5.0)), 2)
 
     basket_data = {
         "바스켓 구분": [
@@ -135,13 +221,7 @@ with tab1:
             "iKafe 고추출"
         ],
         "높이 (Height)": ["19.0mm", "30.0mm", "22.0mm", "26.0mm", "25.0mm"],
-        "도징량": [
-            f"{calculated_dose} g",
-            f"{calculated_dose} g",
-            f"{calculated_dose} g",
-            f"{calculated_dose} g",
-            f"{calculated_dose} g"
-        ],
+        "도징량": [f"{calculated_dose} g"] * 5,
         "예측 피크 압력": [
             f"{single_peak_pressure} bar", 
             f"{estimated_peak_pressure} bar", 
@@ -160,7 +240,7 @@ with tab1:
     st.dataframe(pd.DataFrame(basket_data), use_container_width=True)
 
 # ==========================================
-# 2번 탭: 매버릭 핸드밀 (약배전 모드)
+# 2번 탭: 매버릭 핸드밀 (약배전 모드) - 기존 UI/출력 완벽 유지
 # ==========================================
 with tab2:
     st.subheader("🛠️ Maverick Handmill Single Dosing Calibrator (Dry Filter Baseline)")
@@ -178,7 +258,7 @@ with tab2:
             "타겟 도징량 (g)", 
             min_value=10.0, 
             max_value=25.0, 
-            value=mav_info.get('target_dose', 16.0), 
+            value=float(mav_info.get('target_dose', 16.0)), 
             step=0.1,
             key=f"dose_input_{selected_mav_bean}"
         )
@@ -243,13 +323,7 @@ with tab2:
             "iKafe 고추출"
         ],
         "바스켓 높이": ["22.0 mm", "30.0 mm", "19.0 mm", "26.0 mm", "25.0 mm"],
-        "도징량 (Single Dosing)": [
-            f"{manual_dose} g", 
-            f"{manual_dose} g", 
-            f"{manual_dose} g", 
-            f"{manual_dose} g", 
-            f"{manual_dose} g"
-        ],
+        "도징량 (Single Dosing)": [f"{manual_dose} g"] * 5,
         "예측 피크 압력": [
             f"{max(2.0, round(base_mav_pressure, 1))} bar",
             f"{min(16.0, round(base_mav_pressure + 3.0, 1))} bar",
@@ -276,7 +350,7 @@ with tab2:
     st.dataframe(pd.DataFrame(mav_basket_data), use_container_width=True)
 
 # ==========================================
-# 3번 탭: 원두 프로파일 DB 관리 (표 컬럼 명시적 매핑)
+# 3번 탭: 원두 프로파일 DB 관리 (추가 입력란 및 리스트 출력 완벽 적용)
 # ==========================================
 with tab3:
     st.subheader("🫘 원두 프로파일 DB 관리")
@@ -293,6 +367,13 @@ with tab3:
             new_grind = st.number_input("기준 분쇄도 (단)", 1.0, 10.0, 1.0, 0.5)
             new_dial = st.number_input("기준 다이얼 (클릭)", 1.0, 30.0, 20.0, 0.5)
             new_dose = st.number_input("실측 도징량 (g)", 10.0, 25.0, 17.8, 0.1)
+            new_press = st.number_input("실측 피크 압력 (bar)", 1.0, 16.0, 11.5, 0.1)
+            
+            st.markdown("---")
+            st.markdown("💡 **[선택] 추가 보정 앵커 (없으면 0 또는 빈값 유지)**")
+            new_add_dial = st.number_input("추가 다이얼 레벨 (클릭)", 0.0, 30.0, 0.0, 0.5)
+            new_add_dose = st.number_input("추가 실측 도징량 (g)", 0.0, 25.0, 0.0, 0.1)
+            
             submitted_opera = st.form_submit_button("오페라 원두 저장/업데이트")
             
             if submitted_opera and new_name:
@@ -301,13 +382,41 @@ with tab3:
                     "roast_date": str(new_roast_date),
                     "base_grind": new_grind,
                     "base_dial": new_dial,
-                    "base_dose": new_dose
+                    "base_dose": new_dose,
+                    "base_pressure": new_press,
+                    "add_dial": new_add_dial,
+                    "add_dose": new_add_dose
                 }
+                save_data()
                 st.success(f"'{new_name}' 오페라 원두가 저장되었습니다!")
                 st.rerun()
 
     with col_db2:
-        st.markdown("#### 등록된 오페라 원두 목록")
+        st.markdown("#### 등록된 오페라 원두 목록 및 수정")
+        
+        edit_target = st.selectbox("수정할 오페라 원두 선택", list(st.session_state.bean_db.keys()), key="edit_op_target")
+        t_info = st.session_state.bean_db[edit_target]
+        
+        with st.form("edit_opera_form"):
+            e_roast = st.selectbox("배전도 수정", ["약배전 (Light)", "중배전 (Medium)", "강배전 (Dark)"], 
+                                 index=["약배전 (Light)", "중배전 (Medium)", "강배전 (Dark)"].index(t_info.get("roast", "중배전 (Medium)")))
+            e_dose = st.number_input("실측 도징량 (g)", value=float(t_info.get("base_dose", 17.8)), step=0.1)
+            e_press = st.number_input("실측 압력 (bar)", value=float(t_info.get("base_pressure", 11.5)), step=0.1)
+            e_add_dial = st.number_input("추가 다이얼 (클릭)", value=float(t_info.get("add_dial", 0.0)), step=0.5)
+            e_add_dose = st.number_input("추가 도징량 (g)", value=float(t_info.get("add_dose", 0.0)), step=0.1)
+            
+            submitted_edit_op = st.form_submit_button("선택 원두 업데이트 반영")
+            if submitted_edit_op:
+                st.session_state.bean_db[edit_target]["roast"] = e_roast
+                st.session_state.bean_db[edit_target]["base_dose"] = e_dose
+                st.session_state.bean_db[edit_target]["base_pressure"] = e_press
+                st.session_state.bean_db[edit_target]["add_dial"] = e_add_dial
+                st.session_state.bean_db[edit_target]["add_dose"] = e_add_dose
+                save_data()
+                st.success(f"'{edit_target}' 원두 정보가 업데이트되었습니다!")
+                st.rerun()
+
+        st.markdown("---")
         # 데이터프레임 변환 및 컬럼 한글명/순서 명시적 정의
         opera_df = pd.DataFrame.from_dict(st.session_state.bean_db, orient='index')
         opera_df = opera_df.rename(columns={
@@ -315,7 +424,10 @@ with tab3:
             "roast_date": "로스팅 날짜",
             "base_grind": "기준 분쇄도(단)",
             "base_dial": "기준 다이얼(클릭)",
-            "base_dose": "실측 도징량(g)"
+            "base_dose": "실측 도징량(g)",
+            "base_pressure": "실측 압력(bar)",
+            "add_dial": "추가 다이얼",
+            "add_dose": "추가 도징량"
         })
         st.dataframe(opera_df, use_container_width=True)
         
@@ -323,6 +435,7 @@ with tab3:
         if st.button("선택한 오페라 원두 삭제"):
             if len(st.session_state.bean_db) > 1:
                 del st.session_state.bean_db[del_opera_target]
+                save_data()
                 st.success(f"'{del_opera_target}' 원두가 삭제되었습니다.")
                 st.rerun()
             else:
@@ -354,6 +467,7 @@ with tab3:
                     "ref_pressure": mav_ref_press,
                     "target_dose": mav_dose
                 }
+                save_data()
                 st.success(f"'{mav_name}' 핸드밀 원두가 저장되었습니다!")
                 st.rerun()
 
@@ -375,6 +489,7 @@ with tab3:
         if st.button("선택한 핸드밀 원두 삭제"):
             if len(st.session_state.maverick_bean_db) > 1:
                 del st.session_state.maverick_bean_db[del_mav_target]
+                save_data()
                 st.success(f"'{del_mav_target}' 핸드밀 원두가 삭제되었습니다.")
                 st.rerun()
             else:
@@ -387,6 +502,6 @@ with tab4:
     st.subheader("📐 2D 도징 계산 모델 및 Dry Filter 프로파일 설명")
     st.markdown("""
     - **노-린싱(Dry) 필터 기틀 확립:** 하단 종이 필터 린싱 시 발생하는 수막 흡착(Water Film Lock) 변수를 완전 배제하고, 마른 필터 기준으로 매버릭 핸드밀 약배전 영점을 재구축했습니다.
-    - **원두별 실측 물리 연동:** DB에 원두별 `[피크 압력]`과 `[실측 도징량]`을 등록하면, 선택된 원두의 저항 오프셋이 5종 바스켓 예측 압력 및 유속 모델에 실시간으로 반영됩니다.
+    - **선택적 추가 실측 앵커 보정:** 오페라 원두 DB는 기본 1/20 기준점 외에 추가 실측점(다이얼/도징량)을 선택적으로 입력할 수 있어, 특정 구간의 예측 정밀도를 더욱 극대화합니다. (없으면 기본 기계 패턴 오프셋으로 유연하게 작동합니다.)
     - **핸드밀 싱글 도징 물리 모델:** 핸드밀 탭은 동일 도징 투입 조건을 기본으로 하므로, 바스켓 구조 차이(사제 비가압 대비 순정 더블의 +3.0 bar 등)를 정확하게 동적 산출합니다.
     """)

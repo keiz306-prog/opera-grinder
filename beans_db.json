@@ -1,0 +1,40 @@
+{
+    "bean_db": {
+        "기본 블렌드 (Default Medium)": {
+            "roast": "중배전 (Medium)",
+            "roast_date": "2026-09-20",
+            "base_grind": 1.0,
+            "base_dial": 20.0,
+            "base_dose": 17.8,
+            "base_pressure": 11.5
+        },
+        "컬트커피랩 코즈블랜드": {
+            "roast": "강배전 (Dark)",
+            "roast_date": "2026-09-10",
+            "base_grind": 1.0,
+            "base_dial": 20.0,
+            "base_dose": 17.8,
+            "base_pressure": 11.5,
+            "add_dial": 0.0,
+            "add_dose": 0.0
+        }
+    },
+    "maverick_bean_db": {
+        "과테말라 와이칸 (Wykan)": {
+            "roast": "약배전 (Light)",
+            "processing": "워시드 (Washed)",
+            "roast_date": "2026-09-17",
+            "ref_click": 77,
+            "ref_pressure": 11.0,
+            "target_dose": 16.0
+        },
+        "에티오피아 예가체프 내추럴": {
+            "roast": "약배전 (Light)",
+            "processing": "내추럴 (Natural)",
+            "roast_date": "2026-09-20",
+            "ref_click": 77,
+            "ref_pressure": 10.5,
+            "target_dose": 18.0
+        }
+    }
+}
