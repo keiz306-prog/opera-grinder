@@ -68,7 +68,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "📐 2D 도징 계산 모델 설명"
 ])
 
-# 1번 탭: 동적 추출 예측기 (오페라)
+# 1번 탭: 동적 추출 예측기 (오페라 내장 그라인더 기준)
 with tab1:
     st.subheader("동적 도징 & 압력/유속 예측 대시보드 (v2.7 - 싱글 실측 데이터 반영)")
     
@@ -156,7 +156,7 @@ with tab1:
     }
     st.dataframe(pd.DataFrame(basket_data), use_container_width=True)
 
-# 2번 탭: 매버릭 핸드밀 (약배전 모드) - ★ 실측 적용 업데이트 ★
+# 2번 탭: 매버릭 핸드밀 (약배전 모드) - ★ 4종 바스켓 예측 칸 추가 ★
 with tab2:
     st.subheader("🛠️ Maverick Handmill Single Dosing Calibrator (Dry Filter Baseline)")
     st.caption("수막 현상을 유발하는 린싱(Wet) 데이터를 배제하고, 마른 필터(Dry) 기준 실측 데이터 기반으로 캘리브레이션합니다.")
@@ -177,7 +177,7 @@ with tab2:
         st.info(f"**원두명:** {selected_mav_bean}\n\n**배전도:** {mav_info['roast']}\n\n**가공 방식:** {mav_info['processing']}\n\n**추천 조건:** 상/하단 듀얼 마른(Dry) 종이 필터")
 
     st.markdown("---")
-    st.markdown("### 📈 매버릭 핸드밀 약배전 실측 4포인트 데이터 맵 (16.0g / Dry Filter)")
+    st.markdown("### 📈 매버릭 핸드밀 약배전 실측 4포인트 데이터 맵 (16.0g / Dry Filter 기준)")
     
     # 75~78클릭 실측 DB 정의
     dry_data_df = pd.DataFrame({
@@ -204,6 +204,49 @@ with tab2:
         st.error("🚨 **[74클릭 이하 - 고압 다짐 위험]**: 11~12 bar 이상 고압으로 치솟거나 유속이 극도로 정체될 가능성이 높습니다.")
     else:
         st.info("💡 **[79클릭 이상 - 라이트 추출]**: 30초 대 안팎으로 빠른 유속을 보여주며, 가벼운 바디감과 라이트한 향미 위주로 추출됩니다.")
+
+    # --- ★ [NEW] 매버릭 분쇄도에 따른 4종 바스켓 예측 시뮬레이터 ★ ---
+    st.markdown("---")
+    st.markdown(f"### 🥣 현재 핸드밀 세팅 ({maverick_clicks}클릭 / {manual_dose}g) 기준 4종 바스켓별 예측 시뮬레이션")
+    
+    # 클릭 기반 피크 압력/유속 계산 산출식 (실측 데이터 기반 보정)
+    # 77클릭 순정 더블 기준 11.0 bar / 1.0 g/s 기준
+    click_diff = maverick_clicks - 77
+    dose_factor = manual_dose / 16.0
+    
+    base_mav_pressure = 11.0 - (click_diff * 0.4) * dose_factor
+    base_mav_flow = 1.0 + (click_diff * 0.08) / dose_factor
+    
+    mav_basket_data = {
+        "바스켓 구분": [
+            "순정 더블 비가압 (기준)",
+            "사제 일반 비가압",
+            "IMS [DL2TH26E]",
+            "iKafe 고추출"
+        ],
+        "바스켓 높이": ["30.0 mm", "22.0 mm", "26.0 mm", "25.0 mm"],
+        "권장 도징량": [f"{manual_dose} g", f"{manual_dose} g", f"{manual_dose} g", f"{manual_dose} g"],
+        "예측 피크 압력": [
+            f"{max(2.0, round(base_mav_pressure, 1))} bar",
+            f"{max(2.0, round(base_mav_pressure - 2.5, 1))} bar",
+            f"{max(2.0, round(base_mav_pressure - 4.2, 1))} bar",
+            f"{max(2.0, round(base_mav_pressure - 4.8, 1))} bar"
+        ],
+        "예측 평균 유속": [
+            f"{round(base_mav_flow, 2)} g/s",
+            f"{round(base_mav_flow * 1.2, 2)} g/s",
+            f"{round(base_mav_flow * 1.45, 2)} g/s",
+            f"{round(base_mav_flow * 1.6, 2)} g/s"
+        ],
+        "바스켓 특성 가이드": [
+            "실측 검증 기준 바스켓. 77~78클릭에서 최상 밸런스",
+            "홀 밀도가 약간 높아 유속이 빠르고 압력이 살짝 빠짐",
+            "타공 면적이 넓어 고유속 추출. 75~76클릭으로 미세 조정 권장",
+            "최고 유속 바스켓. 약배전의 밝은 산미 표현에 유리"
+        ]
+    }
+    
+    st.dataframe(pd.DataFrame(mav_basket_data), use_container_width=True)
 
 # 3번 탭: 원두 프로파일 DB 관리
 with tab3:
@@ -286,5 +329,5 @@ with tab4:
     st.markdown("""
     - **노-린싱(Dry) 필터 기틀 확립:** 하단 종이 필터 린싱 시 발생하는 수막 흡착(Water Film Lock) 변수를 완전 배제하고, 마른 필터 기준으로 매버릭 핸드밀 약배전 영점을 재구축했습니다.
     - **매버릭 4포인트 실측 맵:** 과테말라 와이칸 16.0g 기준 75~78클릭의 비선형 유속 완충 구간(76클릭)과 농도/향미 개별 스윗스팟(77, 78클릭)을 정밀하게 연동했습니다.
-    - **오페라 싱글 비가압 보정:** 타임모어 싱글 추출 실측 데이터(11다이얼-12.2g, 피크 압력 10.5~11.5 bar)가 적용된 독립 보정식도 그대로 유지됩니다.
+    - **바스켓별 저항 보정:** IMS나 iKafe 같은 고추출 바스켓 사용 시 매버릭 핸드밀의 추출 압력이 빠지는 현상을 실시간 수식으로 반영했습니다.
     """)
