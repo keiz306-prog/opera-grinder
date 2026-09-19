@@ -70,7 +70,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
 
 # 1번 탭: 동적 추출 예측기 (오페라 내장 그라인더 기준)
 with tab1:
-    st.subheader("동적 도징 & 압력/유속 예측 대시보드 (v2.7 - 싱글 실측 데이터 반영)")
+    st.subheader("동적 도징 & 압력/유속 예측 대시보드 (v2.8 - 싱글 물리 모델 정밀 보정)")
     
     col_a1, col_a2, col_a3 = st.columns(3)
     with col_a1:
@@ -80,21 +80,17 @@ with tab1:
         grind_diff = target_grind - bean_info['base_grind']
         dial_diff = target_dial - bean_info['base_dial']
         
-        # 더블 바스켓용 도징량 계산
+        # 기본 2D 계산 도징량 (더블 기준)
         calculated_dose = round(bean_info['base_dose'] - (grind_diff * 0.5) + (dial_diff * 0.25), 1)
         calculated_dose = max(5.0, calculated_dose)
-        
-        # [실측 보정] 싱글 바스켓용 도징량 계산
-        single_calculated_dose = round(12.2 + (target_dial - 11.0) * 2.0 - (grind_diff * 0.3), 1)
-        single_calculated_dose = max(3.0, single_calculated_dose)
 
-        st.markdown("**2D 모델 예측 도징량 (더블 기준)**")
+        st.markdown("**2D 모델 예측 도징량**")
         st.markdown(f"### {calculated_dose} g")
     with col_a3:
         st.markdown("**적용 모드**")
         st.markdown(f"### {extraction_mode}")
 
-    # --- 기본 더블 압력 산출 로직 ---
+    # --- 기본 더블 바스켓 압력 산출 로직 ---
     base_pressure_calc = 15.5 - (target_grind * 1.2) - (target_dial * 0.1)
     dose_ratio = calculated_dose / bean_info['base_dose']
     adjusted_pressure = base_pressure_calc * (dose_ratio ** 1.0)
@@ -104,10 +100,9 @@ with tab1:
     
     estimated_peak_pressure = round(max(4.0, min(16.0, adjusted_pressure)), 1)
 
-    # [실측 보정] 싱글 비가압 피크 압력 산출
-    single_peak_pressure = round(max(3.0, min(16.0, 11.5 + (target_dial - 11.0) * 2.0 - (grind_diff * 0.5))), 1)
-    if "자동" in extraction_mode:
-        single_peak_pressure = round(max(3.0, single_peak_pressure - 1.5), 1)
+    # ★ [보정] 순정 싱글 비가압 피크 압력 및 유속 정밀 연동 모델 ★
+    # 싱글 바스켓 구조 특성상 동일 도징/분쇄 조건에서 더블 대비 피크 압력이 +2.8 bar 높게 형성됨
+    single_peak_pressure = round(min(16.0, estimated_peak_pressure + 2.8), 1)
 
     st.markdown("---")
     st.subheader("☕ 바스켓 5종 특성별 실측 캘리브레이션 예측 결과")
@@ -122,36 +117,39 @@ with tab1:
         pressure_status_msg = f"🟢 **[표준 추출 구간 ({estimated_peak_pressure} bar)]**: 밸런스가 안정적인 표준 압력 영역입니다."
         st.success(pressure_status_msg)
 
+    # 더블 기준 기본 유속
+    base_flow = round(3.2 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 2)
+
     # 표 구성
     basket_data = {
         "바스켓 구분": [
             "★ 순정 싱글 비가압", 
-            "순정 더블 비가압", 
+            "순정 더블 비가압 (기준)", 
             "사제 일반 비가압", 
             "IMS [DL2TH26E]", 
             "iKafe 고추출"
         ],
         "높이 (Height)": ["19.0mm", "30.0mm", "22.0mm", "26.0mm", "25.0mm"],
-        "예측 도징량": [
-            f"{single_calculated_dose} g",
+        "도징량": [
+            f"{calculated_dose} g",
             f"{calculated_dose} g",
             f"{calculated_dose} g",
             f"{calculated_dose} g",
             f"{calculated_dose} g"
         ],
         "예측 피크 압력": [
-            f"{single_peak_pressure} bar",
-            f"{estimated_peak_pressure} bar", 
+            f"{single_peak_pressure} bar",                                          # 더블 대비 +2.8 bar 확연한 차이 반영
+            f"{estimated_peak_pressure} bar",                                       # 기준 더블
             f"{max(3.0, round(estimated_peak_pressure - 3.0, 1))} bar", 
             f"{max(2.5, round(estimated_peak_pressure - 5.0, 1))} bar", 
             f"{max(2.0, round(estimated_peak_pressure - 5.5, 1))} bar"
         ],
         "예측 평균 유속": [
-            f"{round(1.0 + (target_dial * 0.02), 1)} g/s",
-            f"{round(3.2 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 1)} g/s", 
-            f"{round(3.8 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 1)} g/s", 
-            f"{round(4.5 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 1)} g/s", 
-            f"{round(4.9 * (bean_info['base_dose'] / max(calculated_dose, 5.0)), 1)} g/s"
+            f"{round(base_flow * 0.65, 2)} g/s",                                    # 고저항으로 인한 유속 감쇄 반영
+            f"{base_flow} g/s", 
+            f"{round(base_flow * 1.18, 2)} g/s", 
+            f"{round(base_flow * 1.40, 2)} g/s", 
+            f"{round(base_flow * 1.53, 2)} g/s"
         ]
     }
     st.dataframe(pd.DataFrame(basket_data), use_container_width=True)
@@ -205,11 +203,10 @@ with tab2:
     else:
         st.info("💡 **[79클릭 이상 - 라이트 추출]**: 30초 대 안팎으로 빠른 유속을 보여주며, 가벼운 바디감과 라이트한 향미 위주로 추출됩니다.")
 
-    # --- ★ [수정 완료] 동일 도징량(16.0g 싱글도징) 적용 5종 바스켓 예측 시뮬레이터 ★ ---
+    # --- 동일 도징량(16.0g 싱글도징) 적용 5종 바스켓 예측 시뮬레이터 ---
     st.markdown("---")
     st.markdown(f"### 🥣 현재 핸드밀 세팅 ({maverick_clicks}클릭 / {manual_dose}g 싱글도징) 기준 5종 바스켓별 예측 시뮬레이션")
     
-    # 클릭 기반 피크 압력/유속 계산 산출식 (기준 바스켓 = 사제 일반 비가압)
     click_diff = maverick_clicks - 77
     dose_factor = manual_dose / 16.0
     
@@ -225,7 +222,6 @@ with tab2:
             "iKafe 고추출"
         ],
         "바스켓 높이": ["22.0 mm", "19.0 mm", "30.0 mm", "26.0 mm", "25.0 mm"],
-        # 핸드밀 싱글 도징이므로 모든 바스켓에 설정 도징량 100% 동일 적용
         "도징량 (Single Dosing)": [
             f"{manual_dose} g", 
             f"{manual_dose} g", 
@@ -234,22 +230,22 @@ with tab2:
             f"{manual_dose} g"
         ],
         "예측 피크 압력": [
-            f"{max(2.0, round(base_mav_pressure, 1))} bar",                             # 기준 (사제 일반)
-            f"{max(2.0, round(base_mav_pressure + 2.8, 1))} bar",                         # 싱글 비가압 (16g 과도징으로 퍽 두께 상승 -> 최고 고저항)
-            f"{max(2.0, round(base_mav_pressure + 2.5, 1))} bar",                         # 순정 더블 (홀밀도 낮아 높은 압력)
-            f"{max(2.0, round(base_mav_pressure - 1.7, 1))} bar",                         # IMS
-            f"{max(2.0, round(base_mav_pressure - 2.3, 1))} bar"                          # iKafe
+            f"{max(2.0, round(base_mav_pressure, 1))} bar", 
+            f"{max(2.0, round(base_mav_pressure + 2.8, 1))} bar", 
+            f"{max(2.0, round(base_mav_pressure + 2.5, 1))} bar", 
+            f"{max(2.0, round(base_mav_pressure - 1.7, 1))} bar", 
+            f"{max(2.0, round(base_mav_pressure - 2.3, 1))} bar"
         ],
         "예측 평균 유속": [
-            f"{round(base_mav_flow, 2)} g/s",                                           # 기준 (사제 일반)
-            f"{round(base_mav_flow * 0.65, 2)} g/s",                                      # 싱글 비가압 (높은 저항으로 유속 대폭 감소)
-            f"{round(base_mav_flow * 0.83, 2)} g/s",                                      # 순정 더블
-            f"{round(base_mav_flow * 1.21, 2)} g/s",                                      # IMS
-            f"{round(base_mav_flow * 1.33, 2)} g/s"                                       # iKafe
+            f"{round(base_mav_flow, 2)} g/s", 
+            f"{round(base_mav_flow * 0.65, 2)} g/s", 
+            f"{round(base_mav_flow * 0.83, 2)} g/s", 
+            f"{round(base_mav_flow * 1.21, 2)} g/s", 
+            f"{round(base_mav_flow * 1.33, 2)} g/s"
         ],
         "바스켓 특성 가이드": [
             "핸드밀 약배전 실측 검증 기준 바스켓. 77~78클릭에서 최상 밸런스",
-            "16g 투입 시 좁고 깊은 구조로 인해 초고저항 발생 (79클릭 이상 권장)",
+            "동일 도징 투입 시 좁고 깊은 구조로 인해 초고저항 발생 (79클릭 이상 권장)",
             "홀 밀도가 사제보다 낮아 저항이 더 세게 걸림 (고압 주의)",
             "타공 면적이 넓어 고유속 추출. 75~76클릭으로 미세 조정 권장",
             "최고 유속 바스켓. 약배전의 밝은 산미 표현에 유리"
