@@ -135,7 +135,6 @@ def calculate_bean_dose(target_dial, bean_info):
 
 # --- 매버릭 핸드밀 다중 포인트 동적 도징 및 압력 보간 계산 함수 ---
 def calculate_maverick_dynamics(target_click, mav_info):
-    # 등록된 최대 3개의 실측 포인트 수집 ([클릭, 압력, 도징량])
     points = []
     
     c1 = float(mav_info.get("ref_click", 77.0))
@@ -156,14 +155,11 @@ def calculate_maverick_dynamics(target_click, mav_info):
     if c3 > 0 and p3 > 0 and d3 > 0:
         points.append([c3, p3, d3])
         
-    # 유효 포인트가 없거나 1개뿐일 경우 기본값 처리
     if not points:
         return d1, p1
         
-    # 클릭 수 기준 오름차순 정렬 (보간 정확도를 위해)
     sorted_pts = sorted(points, key=lambda x: x[0])
     
-    # 보간 수행 함수 정의 (클릭 값에 따른 도징량 및 압력 선형 보간)
     def interpolate_value(idx):
         if len(sorted_pts) == 1:
             return sorted_pts[0][idx]
@@ -189,8 +185,8 @@ def calculate_maverick_dynamics(target_click, mav_info):
                     return y0 + (target_click - x0) * slope
             return sorted_pts[0][idx]
 
-    interpolated_dose = interpolate_value(2) # 2번 인덱스가 도징량
-    interpolated_press = interpolate_value(1) # 1번 인덱스가 압력
+    interpolated_dose = interpolate_value(2)
+    interpolated_press = interpolate_value(1)
     
     return round(interpolated_dose, 1), round(interpolated_press, 1)
 
@@ -339,7 +335,7 @@ with tab2:
         st.markdown("### 🎛️ 추출 세팅 컨트롤")
         maverick_clicks = st.slider("핸드밀 분쇄도 (클릭 수)", min_value=50, max_value=85, value=int(mav_info.get('ref_click', 77.0)), step=1, key="mav_clicks_slider")
         
-        # 다중 포인트 보간 로직 적용으로 추천 도징량 자동 계산
+        # 다중 포인트 보간 로직 적용으로 추천 도징량 및 기준 압력 자동 계산
         interpolated_mav_dose, interpolated_mav_press = calculate_maverick_dynamics(float(maverick_clicks), mav_info)
         
         manual_dose = st.number_input(
@@ -362,9 +358,17 @@ with tab2:
         )
 
     st.markdown("---")
+    
+    # --- [동적 압력 연동 로직 적용] ---
+    base_ref_click = float(mav_info.get('ref_click', 77.0))
+    click_diff = base_ref_click - maverick_clicks  # 클릭 수가 낮아질수록(가늘어질수록) 양수(+) 오프셋 발생
+    dose_diff = manual_dose - interpolated_mav_dose # 도징량이 늘어날수록 양수(+) 오프셋 발생
+    
+    # 클릭 수 변화(분쇄도)와 도징량 변화를 모두 반영한 동적 예측 피크 압력 산출
+    mav_estimated_peak = round(max(4.0, min(16.0, interpolated_mav_press + (click_diff * 0.3) + (dose_diff * 0.8))), 1)
+    
     st.subheader(f"☕ 현재 원두 세팅 ({selected_mav_bean} / {maverick_clicks}클릭 / {manual_dose}g) 기준 5종 바스켓별 동적 예측 시뮬레이션")
     
-    mav_estimated_peak = interpolated_mav_press
     mav_single_peak = round(min(16.0, mav_estimated_peak + 2.5), 1)
     mav_base_flow = round(3.2 * (manual_dose / 16.0), 2)
 
@@ -393,7 +397,7 @@ with tab2:
             f"{round(mav_base_flow * 1.3, 2)} g/s"
         ],
         "고분쇄 저도징 연동 반응": [
-            "다중 포인트 보간으로 도징량과 압력이 유기적으로 반영됨",
+            "다중 포인트 보간 및 분쇄도/도징 변동이 압력에 실시간 반영됨",
             "도징량이 줄어들어 고분쇄(가늘게)에서도 과압 및 채널링 방지",
             "좁고 깊은 테이퍼 구조로 클린컵 극대화 세팅",
             "고유속 바스켓 특성 반영",
@@ -551,7 +555,7 @@ with tab4:
             if len(st.session_state.maverick_bean_db) > 1:
                 del st.session_state.maverick_bean_db[del_mav_target]
                 save_data()
-                st.success(f"'{del_mav_target}' 핸드밀 원두가 삭제되었습니다.")
+                st.success(f"'{del_mav_target}' 원두가 삭제되었습니다.")
                 st.rerun()
             else:
                 st.warning("최소 1개의 원두는 남아있어야 합니다.")
@@ -630,6 +634,7 @@ with tab6:
     st.subheader("📐 2D 도징 계산 모델 및 다중 포인트 보간 설명")
     st.markdown("""
     - **매버릭 핸드밀 다중 포인트 보간:** `클릭 수`, `실측 피크 압력`, `실측 도징량` 세트를 최대 3개까지 입력받아 고분쇄 저도징 세팅 시의 동적 흐름을 완벽하게 계산합니다.
-    - **유연한 데이터 적용:** 추가 세트(2·3세트)는 입력하지 않거나 0으로 두면 기본 포인트 1만 작동하며, 입력된 값 사이 구간은 선형 보간을 통해 매끄럽게 연결됩니다.
+    - **유연한 데이터 적용:** 추가 세트(2·3세트는 값이 없을 경우 0으로 두시면 기본 포인트 1만 작동하며, 입력된 값 사이 구간은 선형 보간을 통해 매끄럽게 연결됩니다.
+    - **실시간 압력 연동:** 핸드밀 탭에서 분쇄도 슬라이더나 도징량을 조절할 때, 저항 차이가 실시간으로 예측 압력과 바스켓별 시뮬레이션에 반영됩니다.
     - **오페라 & 핸드밀 분리 관리:** 오페라 원두 DB와 매버릭 핸드밀 DB가 각각 최적의 물리 모델에 맞춰 독자적으로 작동합니다.
     """)
